@@ -1,0 +1,24 @@
+# Local toolchain (JDK 25 + Maven), installed by `make toolchain`
+.tools/
+
+# Raw HTML cache, e-Sbírka dumps, anything fetched from the network
+data/
+
+# Java
+api/target/
+
+# Python
+pipeline/.venv/
+pipeline/**/__pycache__/
+pipeline/*.egg-info/
+.pytest_cache/
+
+# Node
+web/node_modules/
+web/dist/
+
+# Editors / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store

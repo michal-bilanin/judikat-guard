@@ -1,0 +1,135 @@
+# Cross-runtime citation patterns. See PLAN.md section 7.
+#
+# Loaded by BOTH runtimes:
+#   - pipeline/jg/extract/patterns.py  (Python `re`, batch pass over the crawled corpus)
+#   - api/.../document/CitationExtractor.java  (java.util.regex, query time)
+#
+# Every pattern here must behave identically under `java.util.regex` and Python `re`.
+# That rules out: lookbehind, possessive quantifiers, named groups, inline flags, and
+# `\w` / `\d` / `\b` in positions where the Unicode-awareness difference can bite.
+# Python 3 makes `\w` and `\d` Unicode-aware by default; Java's are ASCII-only unless
+# UNICODE_CHARACTER_CLASS is set. Where that difference could change a match, the class
+# is written out explicitly in ASCII instead.
+#
+# Values use TOML *literal* strings (single quotes) so that backslashes reach the regex
+# engine untouched. Never switch these to double-quoted TOML strings.
+#
+# eval/extraction-golden.jsonl pins the expected output of both implementations; the
+# parity test fails the build on divergence.
+
+version = 1
+
+[patterns.ref_no]
+# č. j. 6 Ads 45/2014-32   ->  ("6 Ads 45/2014", "32")
+# The trailing number after the dash is the sheet number (číslo listu); optional.
+regex = 'č\.\s*j\.\s*(\d+\s+[A-Z][a-zA-Z]{1,4}\s+\d+/\d{4})(?:\s*-\s*(\d+))?'
+kind = "ref_no"
+groups = ["ref_no", "sheet_no"]
+
+[patterns.case_no_us]
+# sp. zn. II. ÚS 2379/08, sp. zn. Pl. ÚS 29/98
+# The Constitutional Court numbers panels in Roman numerals; the plenum uses "Pl." INSTEAD
+# of a numeral, never in addition to one. PLAN.md section 7 states this pattern as
+# "(?:Pl\.\s*)?[IVX]+", which makes "Pl." an optional prefix to a REQUIRED numeral and so
+# matches no plenary number at all. Corrected to an alternation: exactly one designator,
+# either "Pl." or a numeral. That matters beyond tidiness - plénum decisions are what
+# derogate a provision, and derogation is the red light PLAN.md section 10 is built around.
+regex = 'sp\.\s*zn\.\s*((?:Pl\.|[IVX]+\.?)\s*ÚS\s+\d+/\d{2,4})'
+kind = "case_no"
+groups = ["case_no"]
+
+[patterns.case_no_gen]
+# sp. zn. 6 Ads 45/2014  -- the NSS / NS format
+regex = 'sp\.\s*zn\.\s*(\d+\s+[A-Z][a-zA-Z]{1,4}\s+\d+/\d{4})'
+kind = "case_no"
+groups = ["case_no"]
+
+[patterns.ecli]
+# ECLI:CZ:NSS:2015:6.Ads.45.2014.32
+# The suffix is ASCII alphanumerics and dots. Written out rather than `[\w.]` because
+# Python's `\w` also matches é, ř and friends while Java's does not.
+regex = 'ECLI:CZ:(US|NSS|NS):\d{4}:[A-Za-z0-9_.]+'
+kind = "ecli"
+groups = ["court"]
+
+[patterns.journal]
+# R 12/2015  -- publication in the official reporter, a signal of higher authority.
+# `\b` is ASCII-word-boundary in Java and Unicode-aware in Python. Here both sides of the
+# boundary are ASCII ("R", a digit) and the character before is a space or start of line,
+# so the two agree. Kept as `\b` because spelling it out would need lookbehind.
+regex = '\bR\s+(\d+)/(\d{4})\b'
+kind = "journal_no"
+groups = ["journal_seq", "journal_year"]
+
+[patterns.provision]
+# § 2000 odst. 1 zákona č. 89/2012 Sb.  ->  ("2000", "1", "89/2012")
+# The act number is very often omitted; resolver.py / ProvisionResolver.java fills it in
+# by scanning backwards for the most recent explicit act. See PLAN.md section 7.
+regex = '§\s*(\d+[a-z]?)(?:\s*odst\.\s*(\d+))?(?:[^.]{0,40}?zák(?:ona|\.)\s*č\.\s*(\d+/\d{4})\s*Sb\.)?'
+kind = "provision"
+groups = ["section", "subsec", "act_no"]
+
+# Sentences containing one of these but yielding no rule match are the only input to the
+# anaphora model pass. See PLAN.md section 7 (`anaphora.py`).
+[triggers]
+citation = [
+  "citovaného rozhodnutí",
+  "citovaném rozhodnutí",
+  "citovaného nálezu",
+  "citovaného rozsudku",
+  "citovaného usnesení",
+  "výše uvedeného nálezu",
+  "výše uvedeného rozsudku",
+  "výše uvedeného rozhodnutí",
+  "výše citovaného",
+  "shora uvedeného rozhodnutí",
+  "shora citovaného",
+  "tamtéž",
+  "posledně uvedeného rozhodnutí",
+  "zmíněného rozsudku",
+  "označeného rozhodnutí",
+]
+
+# Structural router, tier 1: a citation inside a passage reporting what a party argued is
+# not the court relying on it. PLAN.md section 8.
+[markers]
+party_submission = [
+  "stěžovatel odkazuje",
+  "stěžovatel poukazuje",
+  "stěžovatel namítá",
+  "podle stěžovatele",
+  "žalobce namítá",
+  "žalobce odkazuje",
+  "podle žalobce",
+  "žalovaný namítá",
+  "žalovaný odkazuje",
+  "dovolatel poukazuje",
+  "dovolatel namítá",
+  "podle dovolatele",
+  "navrhovatel namítá",
+]
+
+# Structural router, tier 2: forced escalation to the reasoning model. PLAN.md section 8.
+departure = [
+  "odchýlit se",
+  "odchyluje se",
+  "nelze setrvat",
+  "překonán",
+  "překonána",
+  "překonáno",
+  "koriguje",
+  "mění dosavadní",
+  "nesouhlasí s právním názorem",
+  "postoupil rozšířenému senátu",
+  "postoupil velkému senátu",
+  "postupuje rozšířenému senátu",
+  "postupuje velkému senátu",
+]
+
+# Structural router, tier 1: the operative part annulling another decision by reference.
+quashing = [
+  "se ruší",
+  "se zrušuje",
+  "zrušuje se",
+  "zrušují se",
+]

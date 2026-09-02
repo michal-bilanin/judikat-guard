@@ -1,0 +1,60 @@
+name,asOf,treatments,provisions,inherited,expectedLight,expectedReasons,comment
+# Truth table for StatusEngine. PLAN.md section 9. One row per case; every row of the
+# evaluation table appears at least once, then the precedence and threshold cases.
+#
+# treatments  ";"-separated. Each item: LABEL confidence citingDate citingMayDepart citingEcli
+#             citingCourt is NSS and citingPanel is derived from citingMayDepart by the test.
+# provisions  ";"-separated. Each item: provisionId changedOn reworded material derogatedBy
+# inherited   ";"-separated. Each item: light viaEcli
+# "-" in any of those three columns means an empty list; "-" in a field means null.
+# expectedReasons  ";"-separated Reason variant names in the exact order the engine must
+#                  return them. "-" means the list must be empty.
+# All ECLIs are TEST- prefixed so that they cannot resolve against real crawled data.
+#
+# --- one row per line of the evaluation table -----------------------------------------
+quashed,2026-09-01,QUASHED 0.99 2019-01-10 false TEST-Q1,-,-,RED,Quashed,table row 1: formally annulled
+departed_with_authority,2026-09-01,DEPARTED 0.95 2020-02-11 true TEST-D1,-,-,RED,Superseded,table row 2: extended panel may depart so this is a supersession
+provision_derogated,2026-09-01,-,7 2018-06-01 false false TEST-DEROG-1,-,RED,ProvisionDerogated,table row 3: derogation with no treatments at all still goes red
+departed_without_authority,2026-09-01,DEPARTED 0.95 2020-02-11 false TEST-D2,-,-,AMBER,Conflict,table row 4: ordinary panel cannot bind so it is a conflict not a supersession
+narrowed,2026-09-01,NARROWED 0.80 2018-04-13 false TEST-N1,-,-,AMBER,Narrowed,table row 5: scope limited
+provision_reworded_material,2026-09-01,-,7 2017-04-01 true true -,-,AMBER,ProvisionReworded,table row 6: reworded after the decision and judged material
+unclassified,2026-09-01,UNCLASSIFIED 0.00 2022-05-14 false TEST-U1,-,-,AMBER,NeedsReview,table row 7: validation failed twice so the user is told to look
+inherited_red,2026-09-01,-,-,RED TEST-VIA-1,AMBER,InheritedWeakness,table row 8: one hop from a red source
+no_adverse_treatment,2026-09-01,FOLLOWED 0.99 2019-01-10 false TEST-F1,-,-,GREEN,-,table row 9: green with an empty reason list
+# --- labels that never fire a row ------------------------------------------------------
+mentioned_is_green,2026-09-01,MENTIONED 0.95 2019-01-10 false TEST-M1,-,-,GREEN,-,a party citing a case is not the court relying on it
+distinguished_is_green,2026-09-01,DISTINGUISHED 0.95 2019-01-10 false TEST-X1,-,-,GREEN,-,accepting the rule on different facts leaves the rule intact
+criticized_is_green,2026-09-01,CRITICIZED 0.95 2019-01-10 false TEST-K1,-,-,GREEN,-,disagreement without authority changes nothing
+followed_is_green,2026-09-01,FOLLOWED 0.99 2019-01-10 false TEST-F1,-,-,GREEN,-,agreement is not adverse treatment
+# --- precedence ------------------------------------------------------------------------
+quashed_beats_narrowed,2026-09-01,QUASHED 0.99 2019-01-10 false TEST-Q1;NARROWED 0.80 2018-04-13 false TEST-N1,-,-,RED,Quashed;Narrowed,red wins the light but the amber fact is still listed after it
+red_beats_inherited_amber,2026-09-01,QUASHED 0.99 2019-01-10 false TEST-Q1,-,RED TEST-VIA-1,RED,Quashed;InheritedWeakness,inherited weakness never downgrades an established red
+departed_with_beats_departed_without,2026-09-01,DEPARTED 0.95 2020-02-11 true TEST-D1;DEPARTED 0.95 2021-03-12 false TEST-D2,-,-,RED,Superseded;Conflict,authority decides which of two departures sets the light
+derogation_beats_narrowing,2026-09-01,NARROWED 0.80 2018-04-13 false TEST-N1,7 2018-06-01 false false TEST-DEROG-1,-,RED,ProvisionDerogated;Narrowed,provision row and treatment row both cited
+all_rows_fire,2026-09-01,QUASHED 0.99 2019-01-10 false TEST-Q1;DEPARTED 0.95 2020-02-11 true TEST-D1;DEPARTED 0.90 2021-03-12 false TEST-D2;NARROWED 0.80 2018-04-13 false TEST-N1;UNCLASSIFIED 0.00 2022-05-14 false TEST-U1,7 2017-04-01 true true -;8 2016-01-02 false false TEST-DEROG-1,RED TEST-VIA-1,RED,Quashed;Superseded;ProvisionDerogated;Conflict;Narrowed;ProvisionReworded;NeedsReview;InheritedWeakness,every row of the table at once in table order
+# --- thresholds D8 ---------------------------------------------------------------------
+departed_below_red_threshold,2026-09-01,DEPARTED 0.80 2020-02-11 true TEST-D1,-,-,GREEN,-,below the red bar and not demoted to amber: a dropped row is not evidence
+quashed_below_red_threshold,2026-09-01,QUASHED 0.70 2019-01-10 false TEST-Q1,-,-,GREEN,-,a false red destroys trust so the bar is high
+quashed_at_red_threshold,2026-09-01,QUASHED 0.85 2019-01-10 false TEST-Q1,-,-,RED,Quashed,the red bar is inclusive
+narrowed_below_amber_threshold,2026-09-01,NARROWED 0.50 2018-04-13 false TEST-N1,-,-,GREEN,-,below the amber bar
+narrowed_at_amber_threshold,2026-09-01,NARROWED 0.60 2018-04-13 false TEST-N1,-,-,AMBER,Narrowed,the amber bar is inclusive
+conflict_below_amber_threshold,2026-09-01,DEPARTED 0.50 2021-03-12 false TEST-D2,-,-,GREEN,-,below the amber bar
+unclassified_exempt_from_threshold,2026-09-01,UNCLASSIFIED 0.00 2022-05-14 false TEST-U1,-,-,AMBER,NeedsReview,confidence on an UNCLASSIFIED row is meaningless by construction
+mixed_thresholds,2026-09-01,QUASHED 0.70 2019-01-10 false TEST-Q1;NARROWED 0.80 2018-04-13 false TEST-N1,-,-,AMBER,Narrowed,the dropped quashing leaves the surviving narrowing to set the light
+# --- as of date ------------------------------------------------------------------------
+citation_after_asof_ignored,2018-12-31,QUASHED 0.99 2019-01-10 false TEST-Q1,-,-,GREEN,-,as of a date before the annulment the source was still good
+citation_on_asof_counts,2019-01-10,QUASHED 0.99 2019-01-10 false TEST-Q1,-,-,RED,Quashed,the asOf boundary is inclusive
+rewording_after_asof_ignored,2016-12-31,-,7 2017-04-01 true true -,-,GREEN,-,the rewording had not happened yet
+derogation_after_asof_ignored,2018-05-31,-,7 2018-06-01 false false TEST-DEROG-1,-,GREEN,-,the derogation had not happened yet
+partial_asof_filter,2019-06-30,QUASHED 0.99 2020-02-11 false TEST-Q1;NARROWED 0.80 2018-04-13 false TEST-N1,-,-,AMBER,Narrowed,the later annulment is invisible as of this date
+# --- provisions ------------------------------------------------------------------------
+rewording_not_material,2026-09-01,-,7 2017-04-01 true false -,-,GREEN,-,cosmetic renumbering is not a reason
+provision_unchanged,2026-09-01,-,7 - false false -,-,GREEN,-,a provision with no recorded change is never in the future and fires nothing
+provision_reworded_no_change_date,2026-09-01,-,7 - true true -,-,GREEN,-,materiality without a change date cannot be cited so it is not evidence
+two_provisions_reworded,2026-09-01,-,8 2017-04-01 true true -;7 2015-02-03 true true -,-,AMBER,ProvisionReworded;ProvisionReworded,both provisions listed ordered by provision id
+# --- inheritance -----------------------------------------------------------------------
+inherited_amber_does_not_propagate,2026-09-01,-,-,AMBER TEST-VIA-1,GREEN,-,only red propagates and only one hop
+inherited_green_does_not_propagate,2026-09-01,-,-,GREEN TEST-VIA-1,GREEN,-,a healthy source says nothing
+inherited_mixed,2026-09-01,-,-,AMBER TEST-VIA-1;RED TEST-VIA-2,AMBER,InheritedWeakness,only the red one is a reason
+# --- nothing at all --------------------------------------------------------------------
+no_evidence_at_all,2026-09-01,-,-,-,GREEN,-,an unknown source with no citations is green not red

@@ -1,0 +1,34 @@
+citing_ecli,cited_ecli,paragraph_idx,gold_label,note
+# =============================================================================
+# PLACEHOLDER BLOCK. No real labels yet.
+#
+# The 50 hand-labelled rows of PLAN.md section 15 land after M1, because a gold
+# label can only name an ECLI that the crawler actually loaded into `decision`.
+# Hand-label them with the decision text open, spread across all seven labels,
+# and delete this block. Do not fabricate case numbers to fill the file: an
+# invented ECLI reads as a real one and poisons every number in the report.
+#
+# The rows below are commented out and use TEST- identifiers that cannot
+# resolve against decision.ecli. report.py skips comment lines, and it refuses
+# to score any row carrying a TEST- identifier even if the '#' is removed, so
+# uncommenting them yields "placeholder rows only", never a fake score.
+#
+# Columns:
+#   citing_ecli    the decision doing the citing (decision.ecli)
+#   cited_ecli     the decision being cited      (decision.ecli)
+#   paragraph_idx  decision_paragraph.idx of the citing paragraph; blank if the
+#                  edge is not tied to one paragraph
+#   gold_label     one of FOLLOWED MENTIONED DISTINGUISHED NARROWED DEPARTED
+#                  CRITICIZED QUASHED UNCLASSIFIED (PLAN.md section 8)
+#   note           why you chose that label; free text, keep it one line, no
+#                  commas or quote the field
+#
+# TEST-CITING-0001,TEST-CITED-0001,12,FOLLOWED,applies the cited rule without qualification
+# TEST-CITING-0001,TEST-CITED-0002,4,MENTIONED,inside a party-submission passage
+# TEST-CITING-0002,TEST-CITED-0001,31,DISTINGUISHED,rule accepted; facts held to differ
+# TEST-CITING-0002,TEST-CITED-0003,33,NARROWED,rule confined to movable property
+# TEST-CITING-0003,TEST-CITED-0001,18,DEPARTED,extended panel replaces the interpretation
+# TEST-CITING-0004,TEST-CITED-0003,7,CRITICIZED,disagrees but has no authority to change it
+# TEST-CITING-0005,TEST-CITED-0004,,QUASHED,operative part annuls the cited decision
+# TEST-CITING-0005,TEST-CITED-0005,22,UNCLASSIFIED,evidence span failed validation twice
+# =============================================================================
