@@ -819,12 +819,11 @@ stored decisions in the verification window.
   so `crawl()` refuses eagerly with `CrawlUnavailable` rather than guessing at markup
   nobody has observed. This one is not a technical obstacle and cannot be worked around;
   it would need the court's permission.
-- **ÚS is partially open.** Per-decision fetching from `nalus.usoud.cz` works
-  (`fetch_decision`, and one real decision is cached under `data/raw/US`), but enumeration
-  is a stateful ASP.NET postback over `__VIEWSTATE` and session state, so there is no list
-  of document keys to iterate. Since ÚS is the court that derogates provisions and can
-  annul the other two by name, solving enumeration here is the highest-value remaining
-  corpus work after NSS.
+- **ÚS is partially open, and the obstacle turned out not to be enumeration.** NALUS search
+  is indeed a stateful ASP.NET postback with no iterable list of document keys — but
+  enumeration is not needed, because the text URL encodes the case number and the corpus
+  tells us exactly which 753 ÚS decisions it cites. The real blocker is that NALUS publishes
+  no ECLI and `decision.ecli` is the primary key. See "The ÚS corpus" below.
 
 Consequence for the eval artefacts: they were built before any corpus existed and each one
 says so rather than carrying placeholder numbers. `eval/report.py` always exits 0 and
@@ -832,6 +831,69 @@ refuses to score any row bearing a `TEST-` identifier, so it can be run before t
 exists without producing a fake score. The 50 gold labels in `eval/labels.csv` and the
 30-document extraction sample are human work that only becomes possible once NSS rows are
 loaded.
+
+### Extraction, measured against the real corpus
+
+- **The `ecli` pattern has zero real-world hits.** Across all 145,990 crawled paragraphs
+  there is not one `ECLI:CZ:` string — NSS cites exclusively by `sp. zn.` and `č. j.`.
+  `journal_no` is nearly as idle: 25 matches, 0 resolved, because the R-číslo belongs to the
+  Supreme Court's reporter and NSS rarely uses it. Both patterns stay (they cost nothing and
+  an uploaded document may well carry an ECLI), but section 7's implicit assumption that
+  ECLI is a usable *extraction* target is wrong for this corpus. It remains the right
+  primary **key**; it is just never the thing you find in the text.
+- **What actually fails to resolve, from a 40,000-paragraph sample.** Of 13,397 decision
+  references, 8.1% resolve. Of the rest: **86% point at other NSS decisions**, 10% at ÚS
+  decisions, and only 3% at regional courts. So corpus width is the dominant lever and it is
+  a lever worth pulling — going from 4 months to 16 doubled `case_no` and `ref_no`
+  resolution. The case-number *filing* years cluster at 2019–2021, which means the cited
+  decisions themselves sit in 2020–2022.
+
+### The ÚS corpus: enumeration is not the blocker, the primary key is
+
+Section 18 previously recorded NALUS enumeration as the ÚS blocker. That is no longer the
+obstacle, and the real one is sharper.
+
+- **Cited ÚS decisions can be fetched directly, no enumeration needed.** The NALUS text URL
+  encodes the case number: `GetText.aspx?sz={panel}-{number}-{yy}_1`, where the panel is the
+  Roman numeral mapped to a digit (`I`→1 … `IV`→4) and the plenum is the literal `Pl`.
+  Verified live on five: `II. ÚS 2379/08` → `2-2379-08_1`, `III. ÚS 989/08` → `3-989-08_1`,
+  `I. ÚS 741/06` → `1-741-06_1`, `Pl. ÚS 44/21` → `Pl-44-21_1`, `IV. ÚS 3523/20` →
+  `4-3523-20_1`. Since the corpus cites **753 distinct ÚS case numbers** (2,154 mentions),
+  a targeted fetch of exactly the cited decisions is both possible and far cheaper than
+  crawling the court.
+- **The structural `QUASHED` signal is really there.** `IV. ÚS 3523/20` (24. 8. 2021,
+  N 144/107 SbNU 211) has the operative part, after `takto:`, *"Rozsudkem Nejvyššího
+  správního soudu ze dne 29. října 2020 č. j. 5 Afs 470/2019-33 a usnesením Krajského soudu
+  v Brně … se ruší."* That is an ÚS výrok annulling a named NSS decision — a red light that
+  needs **no model call at all**, only the structural rule from section 8. The annulled
+  decision was decided 2020-10-29 and falls inside the 2020–2022 crawl window.
+- **The blocker: NALUS publishes no ECLI, and `decision.ecli` is the primary key.**
+  `GetText.aspx` contains no `ECLI:` string anywhere; `ResultDetail.aspx` needs a session and
+  302s; and the crawled NSS corpus never cites an ECLI either. So there is no authoritative
+  ÚS ECLI within reach, and rule 1 forbids constructing one. The ÚS ECLI scheme is
+  deterministic and the NSS ECLIs already stored follow exactly the same shape — but those
+  are *read off the page*, not derived, and deriving one risks emitting an
+  authoritative-looking identifier that is subtly wrong (the trailing sequence number, and
+  cases with more than one decision). That is a rule 1 judgement for a human, not a call to
+  make in passing. Until it is settled, ÚS decisions are not stored and the structural red
+  light stays out of reach.
+
+### Frontend, verified against the real corpus
+
+Checked in a browser against the live API and the 5,744-decision corpus, not just built.
+The scope header renders section 2's assertion verbatim — *"Posouzeno ke dni 4. 9. 2026
+proti korpusu 5 744 rozhodnutí (NSS) zveřejněných do 30. 4. 2024"* — followed by section
+16's caveat that the result speaks only to that corpus and that not every decision is
+published. Resolved sources show which ECLI they were matched to. The *Nepřiřazené odkazy*
+panel says outright *"Netvrdíme o nich nic — nedostaly zelené ani červené světlo"*, which is
+the honest treatment section 11 demands of the `unresolved` field. Expanding a non-green row
+gives the label in Czech and in the enum, the **verbatim evidence span**, the citing
+decision, its `Rozhodovací těleso` (so the reader sees *why* an extended panel could depart)
+and the paragraph number; a red row lists its amber-grade reasons underneath, matching
+`StatusEngine`. The provision row shows the change date, whether the change is *věcná*, and
+tells the reader to compare both wordings themselves. Demo-mode spans are prefixed
+`UKÁZKOVÁ DATA.` and every demo identifier is `TEST-` prefixed, so mock output can never be
+mistaken for a finding.
 
 ### Build and environment
 

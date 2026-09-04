@@ -138,9 +138,16 @@ def test_registry_sign_to_sz_matches_the_live_gettext_key():
     """Verified against nalus.usoud.cz: GetText.aspx?sz=2-2379-08_1 renders this decision."""
     assert nalus.registry_sign_to_sz("II. ÚS 2379/08") == "2-2379-08"
     assert nalus.registry_sign_to_sz("II.ÚS 2379/08") == "2-2379-08"
-    assert nalus.text_url("2-2379-08").endswith("GetText.aspx?sz=2-2379-08_1")
+    assert nalus.text_url("2-2379-08_1").endswith("GetText.aspx?sz=2-2379-08_1")
 
 
-def test_registry_sign_to_sz_refuses_to_guess_the_plenary_form():
-    with pytest.raises(ValueError, match="never"):
-        nalus.registry_sign_to_sz("Pl. ÚS 33/2000")
+def test_the_plenary_document_key_is_no_longer_a_guess():
+    """``Pl. ÚS 44/21`` -> ``Pl-44-21_1`` was fetched live and returned the full text.
+
+    This function used to refuse the plenary form because it had never been observed. It
+    has been now, so refusing would keep every plénum decision — the ones that derogate a
+    provision — out of reach for no reason. See ``tests/test_nalus.py``, which asserts the
+    same mapping against the page in ``data/raw/US``.
+    """
+    assert nalus.registry_sign_to_sz("Pl. ÚS 44/21") == "Pl-44-21"
+    assert nalus.nalus_sz("Pl. ÚS 44/21") == "Pl-44-21_1"

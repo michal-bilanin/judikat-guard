@@ -38,7 +38,8 @@ export JG_DB_URL  ?= postgresql://$(PGUSER):$(PGPASSWORD)@$(PGHOST):$(PGPORT)/$(
 COURT ?= NSS
 
 .PHONY: help toolchain up down psql migrate migrate-info clean-db api web web-install \
-        venv crawl extract classify eval eval-extract test test-java test-python fmt
+        venv crawl crawl-window load-us extract classify eval eval-extract test test-java \
+        test-python fmt
 
 help: ## List targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -118,6 +119,13 @@ crawl-window: venv ## Bulk-crawl a date window, e.g. make crawl-window SINCE=202
 	@test -n "$(SINCE)" -a -n "$(UNTIL)" || { \
 	  echo "usage: make crawl-window SINCE=YYYY-MM-DD UNTIL=YYYY-MM-DD"; exit 2; }
 	$(PY) scripts/bulk_crawl.py $(SINCE) $(UNTIL)
+
+# The Constitutional Court is not enumerated: NALUS is addressed by document key, and the
+# crawled corpus already says which ÚS decisions it cites. This loads exactly those, most
+# cited first, at one request per second. Resumable: pages replay from data/raw/US and
+# decisions already in the database are skipped.
+load-us: venv ## Load the ÚS decisions the corpus cites, e.g. make load-us LIMIT=40
+	$(PY) scripts/load_us_citations.py $(if $(LIMIT),--limit $(LIMIT),)
 
 extract: venv ## Extract citations from the crawled corpus
 	$(JG) extract
