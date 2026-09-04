@@ -636,6 +636,44 @@ not listed here was built as written.
   material for the materiality call. Note that `/sbr-externi/vyhledavani/...` 404s against
   an internal path of `/esel-esbir-dasex/vyhledavani/...`, so search lives on a different
   service prefix. Note also that `www.e-sbirka.gov.cz` does not resolve; only the apex does.
+- **Section 10's scenario reproduced on real law, with real numbers.** Loading the version
+  timelines for the four sections of the asylum act (325/1999) that the corpus actually
+  cites — 134 `provision_version` rows over 26 provisions — surfaces **four rewording pairs
+  that 84 distinct NSS decisions in the corpus are exposed to**, 76 of them through § 12
+  alone. The changes took effect 2026-06-12 with the EU Pact on Migration and Asylum, and
+  they are not cosmetic: § 12's substantive asylum test moved from the domestic *"odůvodněný
+  strach z pronásledování z důvodu rasy, pohlaví…"* to *"způsobilost pro postavení uprchlíka
+  v souladu s kapitolami II a III kvalifikačního nařízení"*; § 17 odst. 1 changed from
+  grounds for **revoking** asylum to a right to apply for its **extension**; § 32 changed
+  from the 15-day filing deadline to nothing but local jurisdiction. Every 2024 decision
+  interpreting those provisions is interpreting text that no longer exists, and *nothing was
+  ever said against those decisions* — which is exactly why no citation-based system finds
+  this. Note what the cache key buys: 84 affected decisions collapse to **four** version
+  pairs, so four model calls settle all of them. That is section 10's design paying off,
+  measured rather than asserted.
+- **Those 84 decisions currently show GREEN, and that is correct.**
+  `provision_materiality` is empty and `ProvisionRepository` defaults `material` to
+  **false**, because an un-judged rewording must never produce an amber — that would be a
+  verdict with no evidence row behind it (rule 2). The verdicts cannot be hand-written
+  either: rule 3 requires a validated `evidence_span` from an actual model response, and
+  inventing one would fabricate the very evidence the design exists to guarantee. So the
+  amber waits on `ANTHROPIC_API_KEY`, and the system says GREEN rather than guessing.
+- **Schema limitation found while hunting for a red light: `provision` is one level too
+  coarse for real derogations.** Constitutional Court nálezy are reachable and
+  identifiable — an amending instrument whose `kodPodtypu` is `NALEZ` is a derogation, and
+  its `nazev` names what it struck. Two real examples affecting acts this corpus cites:
+  `130/2011 Sb.` (*Pl. ÚS 43/10*) struck **§ 33 odst. 3 věty první** of 150/2002, and
+  `9/2010 Sb.` struck **§ 32 odst. 2 písm. a)** of 325/1999. Both are *partial* — a
+  sentence, a lettered point. `provision` keys on `(act_no, section, subsec)` with no level
+  below `subsec`, so recording either as `provision_version.derogated_by` would assert the
+  whole subsection was struck down, turning every later decision that relies on the
+  surviving text RED. That is the false red D8 rules out, so **neither was written**.
+  Section 1's glossary is right that *derogace* means striking a provision **entirely**, and
+  the schema models exactly that and nothing narrower. A partial derogation is, correctly, a
+  rewording; the version timeline already carries it, and it should reach the user through
+  the amber path rather than the red one. Widening the schema (a `point` column, or a
+  `derogation_scope` on the version) is a real option, but it is a modelling decision, not a
+  bug fix.
 - **The timeline machinery, unchanged by the new source and now fed by it.**
   `build_timeline` closes validity windows to satisfy `ProvisionRepository`'s
   `VERSION_IN_FORCE` exactly (`valid_to` inclusive, so a window closes the day *before* the
@@ -826,19 +864,31 @@ Numbers below were produced by running the pipeline, not by estimating it.
 | # | State | Evidence |
 |---|---|---|
 | **M0** | **done** | `make up && make migrate && curl /api/health` → 200. V1–V4 applied. |
-| **M1** | **done** | **1482 NSS decisions**, 2024-01-02 → 2024-04-30, 39,649 paragraphs, 4,421 aliases, 6 of them `rozšířený senát`. 35.5 min at 1 req/s. A re-run issues zero HTTP requests. |
-| **M2** | **partial** | 47,494 references, 23,777 citations, 7,678 provisions created. Resolution coverage 54.5% overall. The 30-document hand-checked sample the milestone actually asks for does not exist — that is human work. |
-| **M3** | **partial** | 545 decision→decision edges; **523 labelled with no model call** (96%), 22 escalated (21 departure-marker, 1 panel-type). Every stored label is `FOLLOWED` or `MENTIONED`, so **no red light exists in the data** and M3's own "done when" is not met. |
+| **M1** | **done** | **5744 NSS decisions**, 2023-01-03 → 2024-04-30, 145,990 paragraphs, 17,027 aliases, 21 of them `rozšířený senát`. 58.5 min of crawling at 1 req/s across two runs. A re-run issues zero HTTP requests, proven the hard way: Postgres died mid-run and the resume replayed 291 cached days in under a minute before continuing. |
+| **M2** | **partial** | 173,655 references, 90,877 citations, 11,340 provisions created. Resolution 56.9% overall — and widening the corpus from 4 months to 16 more than doubled decision-to-decision resolution (`case_no` 3.5% → **7.3%**, `ref_no` 3.9% → **9.3%**), while `provision` held at ~78%. The 30-document hand-checked sample the milestone asks for still does not exist; that is human work. |
+| **M3** | **partial** | 4090 decision→decision edges; **3914 labelled with no model call (95.7%)**, 176 escalated (162 departure-marker, 14 panel-type). Section 8 budgeted ~7.5% for the model; measured **4.3%**. Every stored label is `FOLLOWED` or `MENTIONED`, so **no red light exists in the data** and M3's own "done when" is not met. 37 edges are reported as unjudgeable for `QUASHED` because their citing decision's výrok is not cached — stated, not silently skipped. |
 | **M4** | **done** | Pasting a document citing `č. j. 5 Azs 120/2023-24` and `sp. zn. 9 Ao 37/2021` resolves both to real ECLIs and returns lights plus the scoped Czech verdict. |
 | **M5** | **not started** | Router tiers 2–3 are built and tested; the 22 escalated edges wait on `ANTHROPIC_API_KEY`. |
-| **M6** | **partial** | Real statutory data loaded: 89/2012 §§ 1180 and 2000, 8 `provision_version` rows over 6 `provision` rows, windows non-overlapping. § 1180 odst. 1 genuinely reworded on 2020-07-01, both wordings stored. The materiality call, which turns that into an amber, needs a model. |
+| **M6** | **partial — detection done at scale, judgement blocked** | Real statutory data for 89/2012, 325/1999 and 150/2002: 249 `provision_version` rows, windows non-overlapping. Section 10's scenario is **reproduced on real law at corpus scale**: **687 of 5744 decisions (12%) rely on a provision that has since been reworded**, and settling every one of them costs **18 model calls** — a 38:1 payoff from keying materiality on the version pair. Biggest single exposures: `150/2002 § 60 odst. 3` (327 decisions), `§ 46 odst. 1` (251), `325/1999 § 12` (211). All 687 correctly read GREEN today, because materiality is unjudged and defaults to false rather than guessing. |
 | **M7** | **not started** | `PropositionChecker` and its prompt exist and are tested against stubs. |
 | **M8** | **blocked on human work** | `eval/labels.csv` has 0 gold rows. Section 15 requires them hand-labelled with the decision text open; fabricating them would violate rule 1 and make every number meaningless. |
 
-**Why every light is currently GREEN, stated plainly.** The corpus is four months of one
-year. Decisions from early 2024 overwhelmingly *follow* what they cite, and the decisions
-they cite from earlier years are not in the corpus — which is why `case_no` resolves at
-3.5% and `ref_no` at 3.9% while `provision` resolves at 78.2%. That gap is the product
-working as designed: unresolved references are a first-class field and the UI quotes the
-corpus bound rather than claiming validity. Widening the crawl backwards is what turns
-those percentages, and the light distribution, into something interesting.
+**Why every light is currently GREEN, stated plainly.** Two independent reasons, and
+neither is a bug.
+
+*Case-law lights.* Every one of the 4090 classified edges is `FOLLOWED` or `MENTIONED`.
+The 176 edges that could carry a `DEPARTED` or `NARROWED` — the ones a departure marker or
+an extended panel flagged — are exactly the ones the router escalates to the reasoning
+model, and that model has not run. Structural signals alone cannot produce a red here:
+`QUASHED` needs the citing court to annul a decision *that is in the corpus*, and NSS
+mostly annuls regional-court decisions, which are filtered out at row-parse time because
+`decision.court_code` only admits the three seeded courts.
+
+*Provision lights.* 687 decisions are exposed to a rewording, but `material` defaults to
+false until a model judges the version pair, and rule 2 forbids an amber with no evidence
+row behind it.
+
+So the honest summary is that the **detection** layer works on real data at real scale and
+the **judgement** layer is one API key away. Widening the crawl further still helps the
+citation graph — going from 4 months to 16 doubled decision-to-decision resolution — but it
+will not by itself produce a non-GREEN light.

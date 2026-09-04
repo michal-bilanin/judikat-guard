@@ -111,6 +111,14 @@ $(JG): pipeline/pyproject.toml
 crawl: venv ## Crawl one court, e.g. make crawl COURT=NSS
 	$(JG) crawl $(COURT)
 
+# A bulk load is a long job: one request per second per host means a full year of NSS takes
+# roughly two hours. Everything is cached under data/raw/, so an interrupted run resumes and
+# a repeat run issues no network requests at all.
+crawl-window: venv ## Bulk-crawl a date window, e.g. make crawl-window SINCE=2023-01-01 UNTIL=2023-12-31
+	@test -n "$(SINCE)" -a -n "$(UNTIL)" || { \
+	  echo "usage: make crawl-window SINCE=YYYY-MM-DD UNTIL=YYYY-MM-DD"; exit 2; }
+	$(PY) scripts/bulk_crawl.py $(SINCE) $(UNTIL)
+
 extract: venv ## Extract citations from the crawled corpus
 	$(JG) extract
 
