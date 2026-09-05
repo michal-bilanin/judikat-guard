@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from typing import Any, Protocol
 
 import httpx
@@ -33,7 +33,15 @@ from jg.classify.prompts import PromptTemplate, prompt_template
 from jg.classify.structural import CitationEdge, citation_sentence, normalise_ws
 from jg.config import llm_api_key, llm_model
 from jg.db import Conn
+from jg.llm_types import ModelCall, ModelUnavailable
 from jg.models import Route, TreatmentLabel, TreatmentResult
+
+# ``ModelCall`` and ``ModelUnavailable`` are re-exported above rather than defined here, so
+# every existing import path still resolves. They moved to :mod:`jg.llm_types` — a leaf
+# module that imports nothing from ``jg`` — when a second provider arrived: ``jg.gemini``
+# importing them from this module put an edge into the ``jg.classify`` package, whose
+# ``__init__`` imports ``router``, which imports ``jg.gemini``. That cycle only surfaced when
+# ``jg.gemini`` was imported first, which the test suite never did. See jg/llm_types.py.
 
 log = logging.getLogger(__name__)
 
@@ -69,14 +77,6 @@ RESPONSE_SCHEMA: dict[str, Any] = {
     "required": ["label", "confidence", "evidence_span", "reasoning"],
     "additionalProperties": False,
 }
-
-#: prompt -> the parsed JSON object the model returned.
-ModelCall = Callable[[str], Mapping[str, Any]]
-
-
-class ModelUnavailable(RuntimeError):
-    """No usable model call can be built, e.g. ``ANTHROPIC_API_KEY`` is not set."""
-
 
 class ResponseRejected(ValueError):
     """A model response failed validation. Carries the sentence stated back on the retry."""

@@ -43,7 +43,7 @@ from jg.classify.reasoning import (
     ResponseRejected,
     is_verbatim,
 )
-from jg.config import llm_api_key, llm_model
+from jg.config import llm_api_key, llm_model, llm_model_name
 from jg.crawl.base import Fetcher, normalise_ws
 from jg.crawl.esbirka import (
     LOCAL_FORMAT,
@@ -58,6 +58,7 @@ from jg.crawl.esbirka import (
     parse_local_dump,
 )
 from jg.db import Conn
+from jg.gemini import provider_model
 
 log = logging.getLogger(__name__)
 
@@ -689,7 +690,10 @@ def judge_materiality(
     ``UNCLASSIFIED`` state and inventing one would be storing an unvalidated label.
     """
     active = template or prompt_template(PROMPT_NAME)
-    name = model_name or llm_model()
+    # The configured provider's model ID, read from the environment without building a
+    # client: a cache hit must still resolve a name to record, and must still cost neither
+    # an API key nor a request.
+    name = model_name or llm_model_name()
     provision = ProvisionRecord(
         act_no=pair["act_no"], section=pair["section"], subsec=pair["subsec"]
     )
@@ -721,7 +725,16 @@ def judge_materiality(
                 store_materiality(conn, verdict)
             return verdict
 
-    call = model if model is not None else anthropic_materiality_model(model=name)
+    # Built only now, after the cache lookup: a resumed run whose pairs are all cached needs
+    # no key at all. The provider is chosen from the environment; Anthropic's factory is
+    # handed over rather than imported, so `jg.gemini` keeps no edge back to this module.
+    call = (
+        model
+        if model is not None
+        else provider_model(
+            RESPONSE_SCHEMA, anthropic=anthropic_materiality_model, model=name
+        )
+    )
 
     attempt = prompt
     violation: str | None = None

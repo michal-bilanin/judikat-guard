@@ -36,6 +36,7 @@ from rich.table import Table
 from jg.classify.prompts import load_prompt
 from jg.classify.reasoning import (
     PROMPT_NAME,
+    RESPONSE_SCHEMA,
     DbResponseCache,
     ModelUnavailable,
     anthropic_model,
@@ -53,8 +54,9 @@ from jg.classify.structural import (
     departure_span,
     marker_set,
 )
-from jg.config import llm_api_key
+from jg.config import llm_model_name, llm_provider, provider_api_key
 from jg.db import Conn, connect
+from jg.gemini import provider_model
 from jg.models import PanelType, Route, TreatmentLabel, TreatmentResult
 
 log = logging.getLogger(__name__)
@@ -546,9 +548,10 @@ def run_classify(court: str | None = None, *, dry_run_only: bool | None = None) 
 
     Structural and triage rows are written first and are always written, so M3's "treatment
     has rows" holds with no API key present at all. The escalated edges then go to the
-    reasoning model — and if ``ANTHROPIC_API_KEY`` is missing the run says so in Czech,
-    prints the tier report and stops, which is exactly the dry run. Nothing crashes and
-    nothing is left half-written.
+    reasoning model of the configured provider (``JG_LLM_PROVIDER``, else whichever key is
+    exported) — and if that provider's key is missing the run says so in Czech, prints the
+    tier report and stops, which is exactly the dry run. Nothing crashes and nothing is left
+    half-written.
     """
     console = Console()
     dry = _dry_run_requested() if dry_run_only is None else dry_run_only
@@ -589,20 +592,30 @@ def run_classify(court: str | None = None, *, dry_run_only: bool | None = None) 
         if not escalations:
             return report()
 
-        if llm_api_key() is None:
+        provider = llm_provider()
+        if provider_api_key(provider) is None:
             return report(
-                note=f"[yellow]ANTHROPIC_API_KEY není nastaven[/yellow]: "
+                note="[yellow]Není nastaven API klíč[/yellow] (GEMINI_API_KEY pro Gemini, "
+                f"ANTHROPIC_API_KEY pro Anthropic; zvolený poskytovatel: {provider}): "
                 f"{len(escalations)} hran čeká na model. Strukturální a triage vrstva jsou "
                 "zapsané, nic dalšího se nespustilo."
             )
+        # The model ID is resolved once and both used and recorded, so the `model` column of
+        # every row this run writes names the model that actually answered (rule 7) rather
+        # than the other provider's default.
+        model_name = llm_model_name(provider)
         try:
-            model = anthropic_model()
+            model = provider_model(
+                RESPONSE_SCHEMA, anthropic=anthropic_model, provider=provider, model=model_name
+            )
         except ModelUnavailable as exc:
             return report(note=f"[red]Model není k dispozici:[/red] {exc}")
 
         cache = DbResponseCache(conn)
         for escalation in escalations:
-            result = classify_edge(escalation.edge, model=model, cache=cache)
+            result = classify_edge(
+                escalation.edge, model=model, model_name=model_name, cache=cache
+            )
             write_treatment(conn, result)
             stats.record_reasoning(result)
         return report()

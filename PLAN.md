@@ -944,6 +944,66 @@ which is three `citation` rows, three identical treatment rows, and was three id
 entries in the evidence panel, all quoting the one výrok. `Reason` records are values, so
 equal ones are the same fact; the list is now distinct while preserving table order.
 
+### Two model providers, because neither subscription includes API access
+
+Section 4 names one model provider. There are now two, and the reason is commercial rather
+than technical: **a Claude Team plan and a Google Pro subscription are both seat products,
+and neither grants API access.** The Anthropic API bills separately from
+`console.anthropic.com`; Google AI Pro likewise does not raise Gemini API quota. Google AI
+Studio does publish a genuinely free API tier, so Gemini is the provider this project can
+actually be run on at zero cost. Anthropic is untouched and remains selectable.
+
+Measured before choosing, rather than estimated after: the queued M5 workload is **1,583
+edges, 10,451,203 prompt characters, ~3.0–3.5M input tokens**. On the Anthropic API that
+is roughly $5 at Haiku 4.5 or $11 at Sonnet 5, halved again by the Batch API — cheap, but
+not free.
+
+- **The seam made this a small change, which is the payoff of D2.** Both runtimes already
+  expressed the model as one narrow contract — `ModelCall = Callable[[str], Mapping]` in
+  Python, `LlmClient.complete(String) -> String` in Java. Everything above it is
+  provider-agnostic: prompt assembly, the evidence-span gate, the single retry, the response
+  cache, the `UNCLASSIFIED` fallback. A provider is a transport and is never a second place
+  where labels are judged, so a cheaper model cannot weaken the safety story — rule 3 still
+  rejects any span that is not a literal substring of the supplied context.
+- **The wire format is the Interactions API, not `generateContent`.** Google replaced the
+  `models/{model}:generateContent` + `contents`/`parts` shape with
+  `POST /v1beta/interactions`: a flat `{model, input}` body, the key in an `x-goog-api-key`
+  **header** (never a `?key=` query parameter, which would put a credential in proxy logs
+  and exception messages), `temperature` and `thinking_level` nested in `generation_config`,
+  JSON constrained by `response_format`, and the reply in a `steps` timeline whose
+  `model_output` step carries the text. Verified against ai.google.dev on 2026-09-05.
+- **Rule 7 is honoured more literally here than on Anthropic.** The Anthropic client
+  documents a deviation: current Claude models removed the sampling parameters and reject a
+  request carrying one, so it sends no `temperature` at all. Gemini still accepts it, so the
+  Gemini path sends `temperature: 0` explicitly.
+- **The response parser is deliberately defensive.** Google documents the SDK's `output_text`
+  convenience property, not the raw wire shape, so the parser prefers the documented
+  `model_output` step, falls back to `output_text`, and otherwise raises naming the status,
+  the keys it saw and a truncated body. It never returns an empty string: that would reach
+  the span gate as a malformed answer and report a *model* failure when what actually
+  happened is that the wire format moved.
+- **Free-tier limits shape the design.** They are enforced per Google Cloud project on
+  requests/minute, tokens/minute and requests/day simultaneously, and breaching any one
+  returns 429. Reported figures are ~10–15 RPM and ~1,000–1,500 RPD, so 1,583 calls is
+  several hours and probably spans the daily cap. Hence two separate mechanisms: proactive
+  **pacing** (a minimum 6 s gap, `JG_GEMINI_MIN_INTERVAL`, set 0 on a paid tier) so the
+  batch mostly never provokes a 429, and **retry** with `Retry-After` and jittered backoff
+  for the axes pacing cannot address. A `Retry-After` over 300 s is treated as a daily cap
+  and fails loudly rather than sleeping for hours. The existing response cache means a
+  resumed run does not re-pay for edges already classified.
+- **Provider selection is one environment decision.** `JG_LLM_PROVIDER` wins if set,
+  otherwise whichever key is present, defaulting to Anthropic so the no-key path is
+  unchanged. `treatment.model` and `provision_materiality.model` record the real model ID,
+  so a corpus holding rows from both providers stays unambiguous about which produced what.
+- **`ModelCall` and `ModelUnavailable` moved to `jg/llm_types.py`.** They lived in
+  `jg.classify.reasoning`, which meant `jg.gemini` importing them put an edge into the
+  `jg.classify` package, whose `__init__` imports `router`, which imports `jg.gemini`. The
+  cycle never failed under pytest — collection order always imported `jg.classify` first —
+  but `import jg.gemini` as the first import of a fresh interpreter died. A leaf module with
+  no `jg` imports cannot take part in a cycle at all, and `tests/test_imports.py` now
+  imports every module first in its own subprocess, because doing it in one process would
+  hide the next such bug exactly as the suite hid this one.
+
 ### Build and environment
 
 - **Postgres is on host port 55432**, not 5432, to stay clear of a system Postgres. Both
