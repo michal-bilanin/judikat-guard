@@ -7,7 +7,7 @@
  * prose attached to `TEST-` decisions; the UI labels the whole report as sample data.
  */
 
-import type { DocumentReport } from './types';
+import type { DocumentReport, PropositionVerdict } from './types';
 
 export const MOCK_REPORT: DocumentReport = {
   asOf: '2026-09-01',
@@ -101,6 +101,27 @@ export const MOCK_REPORT: DocumentReport = {
     { rawText: 'usnesení NS, sp. zn. TEST-4 Cdo 4/2004', reason: 'not in corpus' },
   ],
 };
+
+/**
+ * Sample answer for the proposition check, so the panel can be seen with the API down.
+ *
+ * Always `OVERBROAD`, because that is the case worth showing (PLAN.md section 12 calls it
+ * "the common and useful case") and because a sample that sometimes says SUPPORTS would
+ * invite the reader to believe it had judged anything. Nothing here is a model call: the
+ * span is placeholder prose marked as such, not a quote from a real decision.
+ */
+export function mockProposition(claim: string): PropositionVerdict {
+  return {
+    verdict: 'OVERBROAD',
+    confidence: 0.78,
+    evidenceSpan:
+      'UKÁZKOVÁ DATA. Uvedený závěr soud vyslovil pouze ve vztahu k účastníkům zastoupeným ' +
+      'advokátem na základě plné moci založené ve spise.',
+    note:
+      'UKÁZKOVÁ DATA. Rozhodnutí tento závěr vyslovilo jen pro zastoupení advokátem, ' +
+      `vaše tvrzení jej však uvádí bez tohoto omezení (${claim.trim().length} znaků tvrzení).`,
+  };
+}
 
 export const MOCK_DOCUMENT_TEXT =
   'Ukázkový text. Krajský soud odkázal na rozsudek NSS ze dne 12. 3. 2015, ' +

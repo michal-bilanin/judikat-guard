@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    image: postgres:16
     container_name: judikat-guard-db
     environment:
       POSTGRES_DB: judikat

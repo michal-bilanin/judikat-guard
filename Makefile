@@ -37,7 +37,7 @@ export JG_DB_URL  ?= postgresql://$(PGUSER):$(PGPASSWORD)@$(PGHOST):$(PGPORT)/$(
 
 COURT ?= NSS
 
-.PHONY: help toolchain up down psql migrate migrate-info clean-db api web web-install \
+.PHONY: help toolchain up down psql migrate migrate-repair migrate-info clean-db api web web-install \
         venv crawl crawl-window load-us extract classify eval eval-extract test test-java \
         test-python fmt
 
@@ -64,7 +64,7 @@ $(TOOLS)/maven/bin/mvn:
 
 # --- database --------------------------------------------------------------
 
-up: ## Start Postgres + pgvector and wait for it
+up: ## Start Postgres and wait for it
 	docker compose up -d
 	@echo -n "waiting for postgres"
 	@for i in $$(seq 1 60); do \
@@ -83,6 +83,9 @@ psql: ## Open a psql shell
 
 migrate: ## Apply Flyway migrations
 	$(MVN) -q -f api/pom.xml flyway:migrate
+
+migrate-repair: ## Re-checksum applied migrations (needed once, after V1 lost its vector column)
+	$(MVN) -q -f api/pom.xml flyway:repair
 
 migrate-info: ## Show migration status
 	$(MVN) -q -f api/pom.xml flyway:info

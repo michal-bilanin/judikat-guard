@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import type { DocumentReport, Light, Reason, SourceReport } from '../types';
+import { PropositionPanel } from './PropositionPanel';
 import {
   LIGHT_NAME,
   corpusScope,
@@ -123,7 +124,15 @@ function ReasonBlock({
   );
 }
 
-function SourceItem({ source, report }: { source: SourceReport; report: DocumentReport }) {
+function SourceItem({
+  source,
+  report,
+  useMock,
+}: {
+  source: SourceReport;
+  report: DocumentReport;
+  useMock: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const phrase = verdictPhrase(source.light, source.reasons);
   const scope = corpusScope(report.corpus);
@@ -172,13 +181,17 @@ function SourceItem({ source, report }: { source: SourceReport; report: Document
               />
             ))
           )}
+
+          {/* Decisions only. A provision has no ECLI and holds nothing, so there is no
+              holding to compare a claim against (PLAN.md section 12). */}
+          {source.ecli && <PropositionPanel ecli={source.ecli} useMock={useMock} />}
         </div>
       )}
     </li>
   );
 }
 
-export function SourceList({ report }: { report: DocumentReport }) {
+export function SourceList({ report, useMock }: { report: DocumentReport; useMock: boolean }) {
   const counts = report.sources.reduce<Record<Light, number>>(
     (acc, source) => ({ ...acc, [source.light]: acc[source.light] + 1 }),
     { GREEN: 0, AMBER: 0, RED: 0 },
@@ -201,7 +214,12 @@ export function SourceList({ report }: { report: DocumentReport }) {
       ) : (
         <ul className="sources">
           {report.sources.map((source, idx) => (
-            <SourceItem key={`${source.ecli ?? source.rawText}-${idx}`} source={source} report={report} />
+            <SourceItem
+              key={`${source.ecli ?? source.rawText}-${idx}`}
+              source={source}
+              report={report}
+              useMock={useMock}
+            />
           ))}
         </ul>
       )}

@@ -7,10 +7,12 @@ import org.testcontainers.utility.DockerImageName;
 /**
  * One Postgres container for the whole test run.
  *
- * <p>The image is {@code pgvector/pgvector:pg16}, the same one {@code docker-compose.yml}
- * runs, because {@code V1__init.sql} opens with {@code create extension vector} and a plain
- * {@code postgres} image cannot apply it. Testing against a different image than the one
- * that will be deployed is how a migration that only fails in production gets written.
+ * <p>The image is {@code postgres:16}, the same one {@code docker-compose.yml} runs. It was
+ * {@code pgvector/pgvector:pg16} until V6 dropped the unused {@code ratio_embedding} column
+ * and the {@code vector} extension with it; stock Postgres is now enough to apply every
+ * migration. Testing against a different image than the one that will be deployed is how a
+ * migration that only fails in production gets written — so this constant and the compose
+ * file must stay in step.
  *
  * <p>Started once and never stopped: Testcontainers' own reaper removes it when the JVM
  * exits, and sharing it lets both Spring contexts in this module reuse a single database
@@ -19,7 +21,7 @@ import org.testcontainers.utility.DockerImageName;
 final class SharedPostgres {
 
     private static final DockerImageName IMAGE =
-            DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres");
+            DockerImageName.parse("postgres:16");
 
     private static @Nullable PostgreSQLContainer<?> container;
 

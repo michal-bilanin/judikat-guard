@@ -50,6 +50,33 @@ on Migration and Asylum. The decision now interprets text that no longer exists.
 decision. It took 19 model calls to settle 938 affected decisions, because the materiality
 judgement is cached on the *version pair* rather than on the decision.
 
+## `03-tvrzeni-nad-ramec.txt` — the proposition check (M7)
+
+A different question from the other two. The traffic lights ask whether a source still
+stands; this asks whether **your document is using it honestly**.
+
+The document cites a real decision — `č. j. 3 As 131/2021-86` — for a claim that reaches
+further than the decision goes: *"postačí pouhé prohlášení zástupce, a to v jakémkoli řízení
+před správními orgány i soudy"*. The citation is genuine and the reasoning is genuine; the
+sentence around it is not.
+
+To show it: check the document, expand the source, click **Ověřit tvrzení, pro které tento
+zdroj uvádíte**, and paste the claim from the first paragraph. Expect
+**tvrzení jde nad rámec zdroje** (`OVERBROAD`) with a verbatim quote naming the limit the
+court actually imposed.
+
+This one needs a model call, so it needs a key:
+
+```
+export GEMINI_API_KEY=...
+make api
+```
+
+Without the key the panel says the model is unavailable and returns **no verdict** — the
+error is deliberately not a result. Note also that the source itself is RED here for an
+unrelated reason (it was superseded), which is the point: the two questions are independent
+and the page answers them separately.
+
 ## Running it
 
 ```

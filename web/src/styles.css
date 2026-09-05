@@ -499,6 +499,125 @@ code {
   color: var(--ink-soft);
 }
 
+/* --- proposition check (M7) ---------------------------------------------- */
+
+.prop__open {
+  align-self: flex-start;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+}
+
+.prop__open:hover {
+  border-color: var(--accent);
+  border-style: solid;
+}
+
+.prop {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 0.75rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.prop__title {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.prop__help,
+.prop__meta,
+.prop__caveat {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.prop__input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  resize: vertical;
+}
+
+.prop__input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.prop__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.prop__count {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.prop__error {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #8c2f20;
+}
+
+.prop__result {
+  border-left: 3px solid var(--line);
+  padding: 0.6rem 0 0.6rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+/* Only OVERBROAD and CONTRADICTS are adverse. UNRELATED is a warning about relevance, not
+   about correctness, so it shares the amber rail rather than the red one. */
+.prop__result--ok { border-left-color: #2f7a44; }
+.prop__result--warn { border-left-color: #b8860b; }
+.prop__result--bad { border-left-color: #a12b1b; }
+.prop__result--unknown { border-left-color: var(--ink-soft); }
+
+.prop__resultHead {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.prop__verdict {
+  font-weight: 600;
+}
+
+.prop__kind {
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+.prop__note {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.prop__span {
+  margin: 0;
+  padding-left: 0.7rem;
+  border-left: 2px solid var(--line);
+  font-size: 0.88rem;
+  font-style: italic;
+}
+
 /* --- unresolved ---------------------------------------------------------- */
 
 .panel--unresolved {

@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import tech.judikatguard.decision.Corpus;
@@ -361,6 +362,85 @@ class ApiEndpointsTest {
                             .content("{\"claim\": \"TEST- tvrzení z dokumentu.\"}"))
                     .andExpect(status().isServiceUnavailable())
                     .andExpect(jsonPath("$.title").value(Wording.LLM_UNAVAILABLE_TITLE));
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /api/decisions/{ecli}/proposition-check")
+    class DecisionPropositionCheck {
+
+        @Test
+        @DisplayName("returns the verdict with its verbatim span")
+        void returnsVerdict() throws Exception {
+            given(propositions.checkDecision(anyString(), anyString())).willReturn(Optional.of(
+                    new PropositionVerdict(
+                            PropositionVerdict.OVERBROAD,
+                            0.82,
+                            SPAN,
+                            "Rozhodnutí uvedený závěr vyslovilo jen pro věci movité.")));
+
+            mvc.perform(post("/api/decisions/{ecli}/proposition-check", ECLI)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"claim\": \"TEST- tvrzení z dokumentu.\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.verdict").value("OVERBROAD"))
+                    .andExpect(jsonPath("$.evidenceSpan").value(SPAN))
+                    .andExpect(jsonPath("$.confidence").value(0.82));
+        }
+
+        @Test
+        @DisplayName("the ECLI reaches the service unmangled, dots and colons included")
+        void passesTheEcliThrough() throws Exception {
+            given(propositions.checkDecision(anyString(), anyString())).willReturn(Optional.of(
+                    new PropositionVerdict(PropositionVerdict.SUPPORTS, 0.9, SPAN, "Odpovídá.")));
+
+            mvc.perform(post("/api/decisions/{ecli}/proposition-check", ECLI)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"claim\": \"TEST- tvrzení z dokumentu.\"}"))
+                    .andExpect(status().isOk());
+
+            // An ECLI is full of dots and colons, and it is the primary key. If routing or
+            // decoding mangled it the lookup would miss and the endpoint would answer 404
+            // for a source the corpus really holds — which reads as "we have no record"
+            // when the truth is "we did not ask properly". Pin that it arrives intact.
+            ArgumentCaptor<String> asked = ArgumentCaptor.captor();
+            verify(propositions).checkDecision(asked.capture(), anyString());
+            assertThat(asked.getValue()).isEqualTo(ECLI);
+        }
+
+        @Test
+        @DisplayName("404 for an ECLI the corpus does not hold")
+        void unknownEcli() throws Exception {
+            given(propositions.checkDecision(anyString(), anyString())).willReturn(Optional.empty());
+
+            mvc.perform(post("/api/decisions/{ecli}/proposition-check", "TEST-ECLI-ABSENT")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"claim\": \"TEST- tvrzení z dokumentu.\"}"))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("503, not a verdict, when no model call can be made")
+        void modelUnavailable() throws Exception {
+            given(propositions.checkDecision(anyString(), anyString()))
+                    .willThrow(new LlmClient.Unavailable("GEMINI_API_KEY is not set"));
+
+            mvc.perform(post("/api/decisions/{ecli}/proposition-check", ECLI)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"claim\": \"TEST- tvrzení z dokumentu.\"}"))
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(jsonPath("$.title").value(Wording.LLM_UNAVAILABLE_TITLE));
+        }
+
+        @Test
+        @DisplayName("a blank claim is rejected before any model call")
+        void blankClaimRejected() throws Exception {
+            mvc.perform(post("/api/decisions/{ecli}/proposition-check", ECLI)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"claim\": \"   \"}"))
+                    .andExpect(status().isBadRequest());
+
+            verify(propositions, never()).checkDecision(anyString(), anyString());
         }
     }
 

@@ -56,12 +56,33 @@ public final class PropositionService {
         if (citedEcli == null) {
             return Optional.empty();
         }
-        Optional<DecisionSummary> cited = decisions.find(citedEcli);
+        return checkDecision(citedEcli, claim);
+    }
+
+    /**
+     * The same check addressed by ECLI rather than by a row of the crawled citation graph.
+     *
+     * <p>This is the form an uploaded document needs. {@code POST /api/documents/check}
+     * deliberately writes nothing — a document somebody pasted in has no {@code citation}
+     * row and must not acquire one — so its sources are identified by the ECLI they resolved
+     * to, and there is no id to pass. The citation-id form above stays because it is the
+     * right handle when you are working from the graph itself.
+     *
+     * <p>Both forms end here, so the material shown to the model and the evidence-span gate
+     * applied to its reply are the same whichever door you came in by.
+     *
+     * @return empty when the ECLI is not in the corpus, which the caller reports as 404
+     *     rather than as a verdict: no record is a different answer from no support
+     */
+    public Optional<PropositionVerdict> checkDecision(String ecli, String claim) {
+        Objects.requireNonNull(ecli, "ecli");
+        Objects.requireNonNull(claim, "claim");
+        Optional<DecisionSummary> cited = decisions.find(ecli);
         if (cited.isEmpty()) {
             return Optional.empty();
         }
         DecisionSummary decision = cited.get();
-        List<String> paragraphs = decisions.paragraphs(citedEcli);
+        List<String> paragraphs = decisions.paragraphs(ecli);
         return Optional.of(checker.check(
                 decision.ecli(),
                 decision.courtCode(),

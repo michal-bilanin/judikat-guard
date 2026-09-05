@@ -413,6 +413,7 @@ GET  /api/health
 GET  /api/decisions/{ecli}                    metadata + ratio summary
 GET  /api/decisions/{ecli}/status?asOf=       traffic light + reasons
 POST /api/documents/check                     body: { text } -> DocumentReport
+POST /api/decisions/{ecli}/proposition-check  body: { claim } -> PropositionVerdict
 POST /api/citations/{id}/proposition-check    body: { claim } -> PropositionVerdict
 GET  /api/corpus                              size + coverage dates per court
 ```
@@ -548,6 +549,26 @@ not listed here was built as written.
   both require a response cache and neither can be honoured without a table, plus
   `provision_materiality`, which stores the section 10 materiality verdict keyed on the
   version pair and carries its own `evidence_span` for the same reason `treatment` does.
+
+- **pgvector is gone (2026-09-06).** Section 4 justified the extension with "vectors for
+  ratio retrieval and near-duplicate detection", and section 6 declared
+  `decision.ratio_embedding vector(1536)` to hold them. Neither was ever used: no milestone
+  M0–M8 asked for either, no code in either runtime read or wrote the column, no index was
+  built on it, and it stood null on all 21,212 rows. Its input never existed either — both
+  crawlers set `ratio_summary=None`, so there was no *právní věta* to embed.
+
+  `V6__drop_ratio_embedding.sql` drops the column and the extension, and V1 no longer
+  declares them, so a fresh database installs on stock Postgres rather than needing a host
+  that offers pgvector. `docker-compose.yml` and the Testcontainers image are now
+  `postgres:16`. Editing an applied V1 costs one `make migrate-repair`; the alternative —
+  V1 creating what V6 immediately destroys — would have kept the pgvector requirement alive
+  at install time in exchange for nothing.
+
+  **The consequence worth recording is upstream of the column.** `ratio_summary` being null
+  everywhere means every one of the 1,879 cached `treatment-classify.v1` calls ran with
+  `NO_RATIO` in the holding slot: the classifier judged each relationship from the citing
+  paragraph and its neighbours alone, never seeing what the cited decision held. That is a
+  ceiling on classification quality, and lifting it is a crawler change, not a schema one.
 
 ### Rules engine
 
@@ -1100,6 +1121,32 @@ way.
   `jg status` (per-court row counts and coverage) as a read-only companion to the stage
   commands.
 
+### Proposition check, addressed by ECLI
+
+Section 12 gives the proposition check one endpoint, `POST /api/citations/{id}/proposition-check`,
+keyed on a row of the crawled citation graph. That is the wrong handle for the feature's
+actual user. `POST /api/documents/check` deliberately writes nothing — a document somebody
+pasted in has no `citation` row and must not acquire one — so its sources are identified by
+the ECLI they resolved to, and there is no id to pass.
+
+`POST /api/decisions/{ecli}/proposition-check` was added alongside it. Both forms meet in
+`PropositionService.checkDecision`, so the material shown to the model and the evidence-span
+gate applied to its reply are identical whichever door the caller came in by. The citation-id
+form stays: it is the right handle when working from the graph rather than from a document.
+
+Two things about the UI are deliberate. The claim is **typed by the user**, not extracted
+from their document: guessing which sentence a citation was offered for is a second
+inference problem, and getting it wrong would mean confidently judging a claim the lawyer
+never made. And the check is **per source, on request**, because unlike every other verdict
+on the page it costs a live model call against the full text of the cited decision.
+
+The four verdicts are rendered as full Czech phrases — *tvrzení odpovídá zdroji*, *tvrzení
+jde nad rámec zdroje*, *zdroj se k tvrzení nevyjadřuje*, *zdroj tvrdí opak* — deliberately in
+a different register from the traffic-light vocabulary. *Překonáno* and *zúženo* describe
+what later case law did to the source; these describe the relation between the user's own
+sentence and that source. Blurring the two would let "your claim is too broad" read as "this
+decision was narrowed", which points at a different document entirely.
+
 ### Milestone status, measured rather than asserted
 
 Numbers below were produced by running the pipeline, not by estimating it.
@@ -1113,7 +1160,7 @@ Numbers below were produced by running the pipeline, not by estimating it.
 | **M4** | **done** | Pasting a document citing `č. j. 5 Azs 120/2023-24` and `sp. zn. 9 Ao 37/2021` resolves both to real ECLIs and returns lights plus the scoped Czech verdict. |
 | **M5** | **done** | 1,583 edges labelled by the reasoning tier, on Gemini. **`UNCLASSIFIED` 2.5%**, inside the milestone's 5% bar. The label spread is plausible, which is itself the signal: 764 `MENTIONED` / 564 `FOLLOWED` against a thin tail of 88 `DISTINGUISHED`, 68 `CRITICIZED`, 44 `NARROWED`, 13 `DEPARTED`, 2 `QUASHED`. A model returning two hundred `DEPARTED` would be the alarming outcome. |
 | **M6** | **done** | Real statutory data for 89/2012, 325/1999 and 150/2002: 249 `provision_version` rows, windows non-overlapping. Section 10's scenario is reproduced on real law at corpus scale, and **19 materiality calls settled it** — all 19 judged **material**, confidence 0.95–1.00, putting **938 decisions** on a provision that has since been rewritten under them. That is the 38:1 payoff of keying materiality on the version pair rather than the decision, measured. Biggest exposures: `150/2002 § 60 odst. 3`, `§ 46 odst. 1`, `325/1999 § 12`. |
-| **M7** | **not started** | `PropositionChecker` and its prompt exist and are tested against stubs. |
+| **M7** | **wired end to end, not yet run against a real model** | `POST /api/decisions/{ecli}/proposition-check` and the claim box in the evidence panel, added 2026-09-06. 30 tests, all against stubs. The done-when — "an overbroad citation is flagged in the demo document" — needs one run with `GEMINI_API_KEY` set; `demo/03-tvrzeni-nad-ramec.txt` is the document for it. |
 | **M8** | **blocked on human work** | `eval/labels.csv` has 0 gold rows. Section 15 requires them hand-labelled with the decision text open; fabricating them would violate rule 1 and make every number meaningless. |
 
 **What is and is not reachable without a model, stated plainly.**

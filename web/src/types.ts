@@ -85,3 +85,26 @@ export type DocumentReport = {
 export type CheckRequest = {
   text: string;
 };
+
+/**
+ * `POST /api/decisions/{ecli}/proposition-check` body. PLAN.md section 12: the claim the
+ * document offers the decision for, not the citation itself.
+ */
+export type ClaimRequest = {
+  claim: string;
+};
+
+/**
+ * The answer to "are you using this source correctly". Mirrors `PropositionVerdict` in
+ * Java, field for field.
+ *
+ * `verdict` is `SUPPORTS | OVERBROAD | UNRELATED | CONTRADICTS`, or `UNCLASSIFIED` when the
+ * model's reply failed the evidence-span gate twice — in which case `evidenceSpan` is empty
+ * and `confidence` is 0, and the page must not render it as an answer.
+ */
+export type PropositionVerdict = {
+  verdict: string;
+  confidence: number;
+  evidenceSpan: string;
+  note: string;
+};

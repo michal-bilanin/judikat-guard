@@ -99,6 +99,60 @@ export function reasonDetail(kind: ReasonKind): string {
   return REASON_DETAIL[kind] ?? 'Nepříznivé nakládání zaznamenané v korpusu.';
 }
 
+// --- proposition check (M7) --------------------------------------------------
+
+/**
+ * The four verdicts of PLAN.md section 12, in Czech.
+ *
+ * Deliberately a different register from the traffic-light vocabulary above. *Překonáno*
+ * and *zúženo* describe what later case law did to the source; these describe the relation
+ * between the *user's own sentence* and that source. A bare participle would blur the two,
+ * and "your claim is too broad" being mistaken for "this decision was narrowed" is the one
+ * confusion this feature cannot afford — they point at different documents.
+ *
+ * `UNCLASSIFIED` is not a verdict. It is the model failing the evidence-span gate twice,
+ * and it says so rather than dressing a failure as an answer (CLAUDE.md rule 3).
+ */
+const PROPOSITION_VERDICT: Record<string, string> = {
+  SUPPORTS: 'tvrzení odpovídá zdroji',
+  OVERBROAD: 'tvrzení jde nad rámec zdroje',
+  UNRELATED: 'zdroj se k tvrzení nevyjadřuje',
+  CONTRADICTS: 'zdroj tvrdí opak',
+  UNCLASSIFIED: 'nepodařilo se posoudit',
+};
+
+/** How strongly the verdict reads on the page. Only OVERBROAD/CONTRADICTS are adverse. */
+export type PropositionTone = 'ok' | 'warn' | 'bad' | 'unknown';
+
+const PROPOSITION_TONE: Record<string, PropositionTone> = {
+  SUPPORTS: 'ok',
+  OVERBROAD: 'warn',
+  UNRELATED: 'warn',
+  CONTRADICTS: 'bad',
+  UNCLASSIFIED: 'unknown',
+};
+
+export function propositionVerdict(verdict: string): string {
+  return PROPOSITION_VERDICT[verdict] ?? verdict;
+}
+
+export function propositionTone(verdict: string): PropositionTone {
+  return PROPOSITION_TONE[verdict] ?? 'unknown';
+}
+
+/**
+ * The scope sentence for a proposition check. It is a statement about one decision's own
+ * text, not about the corpus, so it must not borrow the corpus caveat — this check would
+ * give the same answer against a corpus of one.
+ */
+export const PROPOSITION_CAVEAT =
+  'Posouzeno pouze proti textu tohoto rozhodnutí, nikoli proti pozdější judikatuře. ' +
+  'Zda zdroj stále obstojí, říká semafor výše; toto je odpověď na jinou otázku.';
+
+export const PROPOSITION_HELP =
+  'Napište tvrzení, pro které tento zdroj ve svém dokumentu uvádíte — jednou větou, ' +
+  'tak jak by stálo v podání.';
+
 const PANEL_NAME: Record<string, string> = {
   panel: 'senát',
   extended: 'rozšířený senát',

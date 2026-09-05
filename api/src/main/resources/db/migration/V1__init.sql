@@ -1,8 +1,6 @@
 -- Judikát Guard core schema. See PLAN.md section 6.
 -- Flyway owns the schema; the Python pipeline reads and writes rows only.
 
-create extension if not exists vector;
-
 create table court (
   code text primary key,
   name text not null
@@ -17,7 +15,6 @@ create table decision (
   ref_no          text,                   -- č. j.
   journal_no      text,                   -- R-číslo, null if unpublished
   ratio_summary   text,
-  ratio_embedding vector(1536),
   source_url      text not null,
   fetched_at      timestamptz not null
 );

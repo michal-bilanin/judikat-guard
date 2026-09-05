@@ -98,7 +98,7 @@ export default function App() {
       {report && (
         <main className="report">
           <ScopeHeader asOf={report.asOf} corpus={report.corpus} />
-          <SourceList report={report} />
+          <SourceList report={report} useMock={useMock} />
           <UnresolvedPanel unresolved={report.unresolved} corpus={report.corpus} />
         </main>
       )}
