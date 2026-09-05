@@ -126,6 +126,39 @@ departure = [
   "postupuje velkému senátu",
 ]
 
+# Structural router, tier 2: forced escalation, for NARROWED rather than DEPARTED.
+#
+# The `departure` list above only carries departure vocabulary, so a court that *narrows* a
+# cited rule using ordinary narrowing language fell through to the cheap tier and was
+# labelled FOLLOWED with no model call — a green light on a decision whose scope had in fact
+# been cut. Measured on the crawled corpus, roughly 140 of 5,124 triage edges looked like
+# that. NARROWED is an amber row in PLAN.md section 9, so those misses cost a verdict.
+#
+# Chosen against measured corpus frequency, not intuition, on two rules:
+#
+#  * The phrase has to be about limiting the *cited rule's* reach. "toliko" (189 hits) is
+#    just "merely" and attaches to any restrictive sentence, so it is deliberately absent:
+#    it would triple the paid tier to catch the same handful of real narrowings.
+#  * Distinguishing vocabulary is deliberately absent too — "na rozdíl od" (51 hits),
+#    "odlišit". DISTINGUISHED appears in no amber row of section 9's table; it resolves to
+#    GREEN exactly like FOLLOWED, so escalating for it buys eval precision and no verdict.
+#
+# A wrong marker here costs one model call. A missing one costs a false green, which is the
+# error D8 accepts but does not seek out.
+narrowing = [
+  "nedopadá",
+  "nedopadají",
+  "nelze vztáhnout",
+  "nelze aplikovat",
+  "nelze bez dalšího",
+  "nelze mechanicky",
+  "nelze paušálně",
+  "neuplatní se",
+  "závěry nelze",
+  "pouze tehdy",
+  "jen tehdy",
+]
+
 # Structural router, tier 1: the operative part annulling another decision by reference.
 quashing = [
   "se ruší",

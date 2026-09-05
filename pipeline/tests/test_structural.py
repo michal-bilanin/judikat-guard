@@ -18,6 +18,7 @@ import datetime as dt
 
 import pytest
 
+from jg.classify.router import Escalation, EscalationReason, route
 from jg.classify.structural import (
     CONFIDENCE_PARTY_SUBMISSION,
     CONFIDENCE_QUASHED,
@@ -32,6 +33,7 @@ from jg.classify.structural import (
     load_markers,
     locate,
     marker_set,
+    narrowing_span,
     normalise_ws,
     party_submission_span,
     quashed_span,
@@ -359,3 +361,54 @@ def test_edge_identifiers_fold_and_deduplicate():
 def test_as_panel_type_tolerates_an_unknown_value():
     assert as_panel_type("extended") is PanelType.EXTENDED
     assert as_panel_type("senát velký") is PanelType.UNKNOWN
+
+
+# --- narrowing markers, tier 2's second trigger --------------------------------------------
+
+
+def test_narrowing_span_finds_a_scope_limiting_sentence():
+    text = (
+        "Zdejší soud vychází ze závěrů citovaného rozsudku. "
+        "Tyto závěry však nedopadají na situaci, kdy účastník řízení námitku vůbec neuplatnil."
+    )
+    assert narrowing_span(text) == (
+        "Tyto závěry však nedopadají na situaci, kdy účastník řízení námitku vůbec neuplatnil."
+    )
+
+
+def test_narrowing_span_is_none_without_a_marker():
+    assert narrowing_span("Zdejší soud vychází ze závěrů citovaného rozsudku.") is None
+
+
+def test_narrowing_and_departure_vocabularies_do_not_overlap():
+    """They escalate for different labels, so sharing a phrase would blur the report."""
+    markers = load_markers()
+    assert not set(markers.narrowing) & set(markers.departure)
+
+
+def test_the_narrowing_list_excludes_distinguishing_vocabulary():
+    """DISTINGUISHED is in no amber row of PLAN.md section 9 — it resolves to GREEN exactly
+    like FOLLOWED, so escalating for it would spend a model call and change no verdict."""
+    markers = load_markers()
+    for phrase in ("na rozdíl od", "odlišit", "odlišuje se"):
+        assert phrase not in markers.narrowing
+
+
+def test_the_narrowing_list_excludes_toliko():
+    """Measured at 189 hits across the triage tier: "toliko" is "merely" and attaches to any
+    restrictive sentence, so it would triple the paid tier to catch the same narrowings."""
+    assert "toliko" not in load_markers().narrowing
+
+
+def test_a_narrowing_marker_escalates_rather_than_labelling():
+    """Tier 2 produces no label. It only says the passage is worth a reading."""
+    candidate = edge(
+        context=(
+            "Soud odkázal na rozsudek č. j. 6 Ads 45/2014-32. "
+            "Uvedené závěry nelze vztáhnout na řízení zahájená před účinností novely.",
+        ),
+        context_focus=0,
+    )
+    routing = route(candidate)
+    assert isinstance(routing, Escalation)
+    assert routing.reason is EscalationReason.NARROWING_MARKER

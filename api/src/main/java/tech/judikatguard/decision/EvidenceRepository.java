@@ -35,6 +35,21 @@ public final class EvidenceRepository {
      * unique on {@code (citation_id, prompt_version)}, so a re-classification under a newer
      * prompt leaves both rows in place; the newest {@code created_at} wins, and the older
      * label stays in the table as history rather than being counted twice.
+     *
+     * <p>Self-citations are excluded. A treatment label describes what one decision does to
+     * <em>another</em>, so an edge whose citing and cited ECLI are the same is not a
+     * relationship at all — it is the extractor having matched the decision's own reference
+     * number where the decision talks about itself. Observed on real data:
+     * {@code 7 As 347/2021-86} narrates in its own reasoning that the Constitutional Court
+     * annulled it, which produced a {@code QUASHED} row citing the decision against itself
+     * and an evidence panel reading "quashed by itself". The corpus carries 1,127 such
+     * edges, ten of them verdict-bearing.
+     *
+     * <p>Note what this costs and why it is still right: that particular decision <em>was</em>
+     * annulled, and dropping the self-loop loses the red, because the proper edge — the
+     * Constitutional Court's own výrok naming the decision — is not in the corpus. The
+     * honest answer to a missing edge is a missing edge, reported through the coverage
+     * bound, not a verdict resting on a decision quashing itself.
      */
     private static final String TREATMENTS_SQL = """
             select distinct on (c.id)
@@ -58,6 +73,7 @@ public final class EvidenceRepository {
                     and da.citing_panel = citing.panel_type
                     and da.cited_court  = cited.court_code
              where c.cited_ecli in (:eclis)
+               and c.citing_ecli <> c.cited_ecli
              order by c.id, t.created_at desc
             """;
 

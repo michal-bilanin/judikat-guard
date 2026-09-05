@@ -1040,6 +1040,39 @@ At 500/day the 1,583-edge queue is roughly four sessions. The per-minute pacing 
 help with a daily cap — nothing does except coming back — which is precisely why the work
 has to be durable.
 
+### The router had a trigger for red and none for amber
+
+Section 8 gives tier 2 one text trigger, the `departure` marker list. That list is about
+*departures*. `NARROWED` is a separate label and an **amber row of section 9's table**, and
+nothing in the router escalated for it: a court narrowing a cited rule in ordinary narrowing
+language fell through to triage, was labelled `FOLLOWED` with no model call, and the source
+came back GREEN with its scope quietly cut. A `narrowing` marker list now sits beside
+`departure`, with its own `EscalationReason`.
+
+The list was chosen against measured corpus frequency rather than intuition, and two
+exclusions are the interesting part:
+
+- **Distinguishing vocabulary is deliberately absent** — `na rozdíl od` (51 hits in the
+  triage tier), `odlišit`. `DISTINGUISHED` appears in **no** amber row of section 9; it
+  resolves to GREEN exactly like `FOLLOWED`. Escalating for it would spend a model call and
+  change no verdict. Worth stating plainly because the intuition runs the other way: the
+  DISTINGUISHED / NARROWED / DEPARTED cluster is where section 15 says the reasoning model
+  earns its keep, but only two of those three can move a light.
+- **`toliko` is absent** despite being the single most frequent candidate (189 hits). It
+  means "merely" and attaches to any restrictive sentence, so it would roughly triple the
+  paid tier to catch the same handful of real narrowings.
+
+Measured effect, using the router's own code over the real ±2 context windows rather than a
+SQL approximation: **355 of 5,124 stored triage rows** would now escalate — appreciably more
+than the ~140 a single-paragraph probe suggested, which is itself a reminder that the window
+is what the router reads. **Zero** of them were already caught by a departure marker, so the
+two vocabularies do not overlap and the new list is not paying for work the old one did.
+
+Those 355 rows were deleted and re-queued. That is safe to do exactly because of what they
+are: `route = 'triage'`, `model = null` — no model call was ever spent on them, so nothing
+paid for was discarded. A row produced by the reasoning tier would never be re-opened this
+way.
+
 ### Build and environment
 
 - **Postgres is on host port 55432**, not 5432, to stay clear of a system Postgres. Both
@@ -1075,8 +1108,8 @@ Numbers below were produced by running the pipeline, not by estimating it.
 | **M2** | **partial** | 173,655 references, 90,877 citations, 11,340 provisions created. Resolution 56.9% overall — and widening the corpus from 4 months to 16 more than doubled decision-to-decision resolution (`case_no` 3.5% → **7.3%**, `ref_no` 3.9% → **9.3%**), while `provision` held at ~78%. The 30-document hand-checked sample the milestone asks for still does not exist; that is human work. |
 | **M3** | **done** | **A genuine red light exists in the data**, produced with no model call: 25 `QUASHED` rows over 5 real annulment pairs, structural route, confidence 1.0. `ECLI:CZ:NSS:2020:5.Afs.470.2019.33` returns RED / *zrušeno*, evidenced by the verbatim výrok of `IV. ÚS 3523/20`. Section 8 budgeted ~7.5% of edges for the model; measured **4.3%**. Everything else is still `FOLLOWED`/`MENTIONED` — `DEPARTED` and `NARROWED` need the reasoning tier. |
 | **M4** | **done** | Pasting a document citing `č. j. 5 Azs 120/2023-24` and `sp. zn. 9 Ao 37/2021` resolves both to real ECLIs and returns lights plus the scoped Czech verdict. |
-| **M5** | **not started** | Router tiers 2–3 are built and tested; the 22 escalated edges wait on `ANTHROPIC_API_KEY`. |
-| **M6** | **partial — detection done at scale, judgement blocked** | Real statutory data for 89/2012, 325/1999 and 150/2002: 249 `provision_version` rows, windows non-overlapping. Section 10's scenario is **reproduced on real law at corpus scale**: **687 of 5744 decisions (12%) rely on a provision that has since been reworded**, and settling every one of them costs **18 model calls** — a 38:1 payoff from keying materiality on the version pair. Biggest single exposures: `150/2002 § 60 odst. 3` (327 decisions), `§ 46 odst. 1` (251), `325/1999 § 12` (211). All 687 correctly read GREEN today, because materiality is unjudged and defaults to false rather than guessing. |
+| **M5** | **done** | 1,583 edges labelled by the reasoning tier, on Gemini. **`UNCLASSIFIED` 2.5%**, inside the milestone's 5% bar. The label spread is plausible, which is itself the signal: 764 `MENTIONED` / 564 `FOLLOWED` against a thin tail of 88 `DISTINGUISHED`, 68 `CRITICIZED`, 44 `NARROWED`, 13 `DEPARTED`, 2 `QUASHED`. A model returning two hundred `DEPARTED` would be the alarming outcome. |
+| **M6** | **done** | Real statutory data for 89/2012, 325/1999 and 150/2002: 249 `provision_version` rows, windows non-overlapping. Section 10's scenario is reproduced on real law at corpus scale, and **19 materiality calls settled it** — all 19 judged **material**, confidence 0.95–1.00, putting **938 decisions** on a provision that has since been rewritten under them. That is the 38:1 payoff of keying materiality on the version pair rather than the decision, measured. Biggest exposures: `150/2002 § 60 odst. 3`, `§ 46 odst. 1`, `325/1999 § 12`. |
 | **M7** | **not started** | `PropositionChecker` and its prompt exist and are tested against stubs. |
 | **M8** | **blocked on human work** | `eval/labels.csv` has 0 gold rows. Section 15 requires them hand-labelled with the decision text open; fabricating them would violate rule 1 and make every number meaningless. |
 

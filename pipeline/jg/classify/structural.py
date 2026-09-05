@@ -76,11 +76,15 @@ def fold(text: str) -> str:
 
 @dataclass(frozen=True)
 class MarkerSet:
-    """The three ``[markers]`` lists from ``extract/patterns.toml``."""
+    """The ``[markers]`` lists from ``extract/patterns.toml``."""
 
     party_submission: tuple[str, ...]
     departure: tuple[str, ...]
     quashing: tuple[str, ...]
+    #: Scope-limiting language. Separate from :attr:`departure` because it escalates for a
+    #: different label — NARROWED rather than DEPARTED — and the two vocabularies do not
+    #: overlap: a court narrowing a rule is not departing from it.
+    narrowing: tuple[str, ...]
 
 
 def load_markers(path: Path = PATTERNS_TOML) -> MarkerSet:
@@ -105,6 +109,7 @@ def load_markers(path: Path = PATTERNS_TOML) -> MarkerSet:
         party_submission=listed("party_submission"),
         departure=listed("departure"),
         quashing=listed("quashing"),
+        narrowing=listed("narrowing"),
     )
 
 
@@ -183,6 +188,23 @@ def departure_span(text: str, markers: MarkerSet | None = None) -> str | None:
     active = markers or marker_set()
     for _start, sentence in sentences(text):
         if find_marker(sentence, active.departure) is not None:
+            return sentence.strip()
+    return None
+
+
+def narrowing_span(text: str, markers: MarkerSet | None = None) -> str | None:
+    """The sentence carrying a scope-limiting marker, or None. Tier 2's second trigger.
+
+    The same shape as :func:`departure_span` and separate for the same reason the lists are
+    separate: this one escalates because the cited rule may have been *narrowed*, which is
+    an amber row in PLAN.md section 9, not because the court departed from it.
+
+    Like every tier-2 trigger this produces no label. It says only that the passage is worth
+    a reading, which is the one thing a substring match can honestly claim.
+    """
+    active = markers or marker_set()
+    for _start, sentence in sentences(text):
+        if find_marker(sentence, active.narrowing) is not None:
             return sentence.strip()
     return None
 

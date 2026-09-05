@@ -388,6 +388,18 @@ public final class PatternSet {
      * {@code [markers].quashing}: the operative-part wording that annuls another decision,
      * the {@code QUASHED} signal (PLAN.md section 8, tier 1).
      */
+    /**
+     * {@code [markers].narrowing}: scope-limiting wording that forces escalation for a
+     * possible {@code NARROWED}, as distinct from a departure. Kept separate from
+     * {@link #departureMarkers()} because the two vocabularies do not overlap — a court
+     * narrowing a rule is not departing from it — and because {@code NARROWED} is an amber
+     * row of PLAN.md section 9 while {@code DISTINGUISHED} is not, which is why
+     * distinguishing vocabulary is deliberately absent from the list.
+     */
+    public List<String> narrowingMarkers() {
+        return markers("narrowing");
+    }
+
     public List<String> quashingMarkers() {
         return markers("quashing");
     }

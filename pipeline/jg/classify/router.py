@@ -53,6 +53,7 @@ from jg.classify.structural import (
     classify_structural,
     departure_span,
     marker_set,
+    narrowing_span,
 )
 from jg.config import llm_model_name, llm_provider, provider_api_key
 from jg.db import Conn, connect
@@ -95,6 +96,9 @@ class EscalationReason(StrEnum):
     PANEL_TYPE = "panel_type"
     #: A departure marker occurs in the context window.
     DEPARTURE_MARKER = "departure_marker"
+    #: A scope-limiting marker occurs in the context window. Separate from
+    #: :attr:`DEPARTURE_MARKER` so the dry run shows what each vocabulary actually costs.
+    NARROWING_MARKER = "narrowing_marker"
     #: Triage was not confident enough, or could not quote its own evidence.
     LOW_CONFIDENCE = "low_confidence"
 
@@ -171,6 +175,11 @@ def route(
 
     if departure_span(edge.context_text, active) is not None:
         return Escalation(edge, EscalationReason.DEPARTURE_MARKER)
+
+    # Narrowing is checked after departure only because a passage carrying both is better
+    # described as a departure; either way it escalates, so the order costs nothing.
+    if narrowing_span(edge.context_text, active) is not None:
+        return Escalation(edge, EscalationReason.NARROWING_MARKER)
 
     verdict = triage(edge)
     if verdict.confidence < TRIAGE_THRESHOLD:
@@ -308,6 +317,7 @@ def dry_run(
 _REASON_CS = {
     "panel_type": "panel_type: rozšířený/velký senát nebo plénum",
     "departure_marker": "departure_marker: marker odchýlení v kontextu",
+    "narrowing_marker": "narrowing_marker: marker zúžení dosahu v kontextu",
     "low_confidence": "low_confidence: triage si není jistá",
 }
 
