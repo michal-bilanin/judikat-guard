@@ -895,6 +895,55 @@ tells the reader to compare both wordings themselves. Demo-mode spans are prefix
 `UKÁZKOVÁ DATA.` and every demo identifier is `TEST-` prefixed, so mock output can never be
 mistaken for a finding.
 
+### The first red light, and the false red found on the way to it
+
+The ÚS corpus landed: **2,754 Constitutional Court decisions**, fetched one at a time by
+case number through the URL mapping above, keyed on the NALUS document key
+(`decision.ecli = "nalus:4-3523-20_1"`) per the user's decision. `V5__decision_key_convention
+.sql` records that convention in the schema as column comments — no DDL, no data change,
+because Flyway must stay the one place the schema's meaning is written down. That produced
+the first **RED light in real data, with no model call**: 25 `QUASHED` rows over 5 genuine
+annulment pairs, structural route, confidence 1.0. Verified end to end — a document citing
+`č. j. 5 Afs 470/2019-33` comes back RED, *zrušeno*, evidenced by the verbatim výrok of
+`IV. ÚS 3523/20`. M3's "done when" is met.
+
+**But the first run produced 38 QUASHED rows, and 4 of the 9 distinct pairs were false.**
+Worth recording in full, because the failure was silent and the mechanism is general.
+
+- *The symptom.* The annulled decision **postdated its own annulment**: `I. ÚS 2164/17`
+  (2018-10-25) was reported as having quashed a decision from 2020-05-28. Logically
+  impossible, and it took a date comparison to see — every individual component looked right,
+  including a verbatim výrok naming the case number.
+- *The cause.* `alias_candidates` resolved a `č. j.` with a sheet number by trying the full
+  form first and then **falling back to the bare spisová značka**. A case number is not
+  unique to a decision: one case yields several decisions over the years, each with its own
+  sheet number. The cited `3 As 205/2016-38` (2017, annulled) fell back to `3 as 205/2016`,
+  which the corpus had registered against `3 As 205/2016-63` — the decision the same court
+  issued **in 2020 on remand, after the annulment**. So the system took the current, valid
+  successor decision and marked it dead, on the strength of the annulment of its predecessor.
+  That is a false red, the one error D8 says is unacceptable, and it arrived pointing at
+  exactly the decision a user would most want to rely on.
+- *Two fixes, because one was not enough.* The fallback is gone: a `č. j.` carrying a sheet
+  resolves only on the full form, and a lost match is a coverage gap the product already
+  states openly. And `classify_structural` now refuses any annulment that is not
+  chronological — the cited decision must strictly predate the citing one, and a missing date
+  is a refusal rather than an assumption. The guard is redundant with the resolver fix today
+  and deliberately kept: it is an absolute invariant about what a court can do, it costs one
+  comparison, and it catches this whole class however a reference came to be misresolved.
+- *The blast radius.* 278 of 7,024 resolved decision citations — **4%** — pointed at the
+  wrong decision of the right case. Those rows and their treatments were deleted rather than
+  left to rot; QUASHED fell from 38 to 25 and every surviving pair is chronologically sound.
+- *Why 4% concentrated on red.* This error is not uniform. A case acquires a second decision
+  precisely *because* the first was annulled, so the very cases that carry an annulment are
+  the ones most likely to have two decisions to confuse. A rare-looking resolution bug landed
+  almost entirely on the highest-stakes verdict the system produces.
+
+**Reasons are now deduplicated in `StatusEngine`.** One decision commonly cites another in
+several paragraphs — `IV. ÚS 3523/20` names the annulled judgment in paragraphs 2, 3 and 4 —
+which is three `citation` rows, three identical treatment rows, and was three identical
+entries in the evidence panel, all quoting the one výrok. `Reason` records are values, so
+equal ones are the same fact; the list is now distinct while preserving table order.
+
 ### Build and environment
 
 - **Postgres is on host port 55432**, not 5432, to stay clear of a system Postgres. Both
@@ -926,31 +975,29 @@ Numbers below were produced by running the pipeline, not by estimating it.
 | # | State | Evidence |
 |---|---|---|
 | **M0** | **done** | `make up && make migrate && curl /api/health` → 200. V1–V4 applied. |
-| **M1** | **done** | **5744 NSS decisions**, 2023-01-03 → 2024-04-30, 145,990 paragraphs, 17,027 aliases, 21 of them `rozšířený senát`. 58.5 min of crawling at 1 req/s across two runs. A re-run issues zero HTTP requests, proven the hard way: Postgres died mid-run and the resume replayed 291 cached days in under a minute before continuing. |
+| **M1** | **done, two courts** | **18,458 NSS decisions** (2020-01-06 → 2024-04-30) plus **2,754 ÚS decisions** — 21,212 in all, 553,659 paragraphs, 64,123 aliases. The ÚS side is a *targeted* load: only the decisions the corpus actually cites, fetched by case number, since NALUS needs no enumeration once you can build the URL. A re-run issues zero HTTP requests, proven the hard way — Postgres died mid-crawl and the resume replayed 291 cached days in under a minute before continuing. |
 | **M2** | **partial** | 173,655 references, 90,877 citations, 11,340 provisions created. Resolution 56.9% overall — and widening the corpus from 4 months to 16 more than doubled decision-to-decision resolution (`case_no` 3.5% → **7.3%**, `ref_no` 3.9% → **9.3%**), while `provision` held at ~78%. The 30-document hand-checked sample the milestone asks for still does not exist; that is human work. |
-| **M3** | **partial** | 4090 decision→decision edges; **3914 labelled with no model call (95.7%)**, 176 escalated (162 departure-marker, 14 panel-type). Section 8 budgeted ~7.5% for the model; measured **4.3%**. Every stored label is `FOLLOWED` or `MENTIONED`, so **no red light exists in the data** and M3's own "done when" is not met. 37 edges are reported as unjudgeable for `QUASHED` because their citing decision's výrok is not cached — stated, not silently skipped. |
+| **M3** | **done** | **A genuine red light exists in the data**, produced with no model call: 25 `QUASHED` rows over 5 real annulment pairs, structural route, confidence 1.0. `ECLI:CZ:NSS:2020:5.Afs.470.2019.33` returns RED / *zrušeno*, evidenced by the verbatim výrok of `IV. ÚS 3523/20`. Section 8 budgeted ~7.5% of edges for the model; measured **4.3%**. Everything else is still `FOLLOWED`/`MENTIONED` — `DEPARTED` and `NARROWED` need the reasoning tier. |
 | **M4** | **done** | Pasting a document citing `č. j. 5 Azs 120/2023-24` and `sp. zn. 9 Ao 37/2021` resolves both to real ECLIs and returns lights plus the scoped Czech verdict. |
 | **M5** | **not started** | Router tiers 2–3 are built and tested; the 22 escalated edges wait on `ANTHROPIC_API_KEY`. |
 | **M6** | **partial — detection done at scale, judgement blocked** | Real statutory data for 89/2012, 325/1999 and 150/2002: 249 `provision_version` rows, windows non-overlapping. Section 10's scenario is **reproduced on real law at corpus scale**: **687 of 5744 decisions (12%) rely on a provision that has since been reworded**, and settling every one of them costs **18 model calls** — a 38:1 payoff from keying materiality on the version pair. Biggest single exposures: `150/2002 § 60 odst. 3` (327 decisions), `§ 46 odst. 1` (251), `325/1999 § 12` (211). All 687 correctly read GREEN today, because materiality is unjudged and defaults to false rather than guessing. |
 | **M7** | **not started** | `PropositionChecker` and its prompt exist and are tested against stubs. |
 | **M8** | **blocked on human work** | `eval/labels.csv` has 0 gold rows. Section 15 requires them hand-labelled with the decision text open; fabricating them would violate rule 1 and make every number meaningless. |
 
-**Why every light is currently GREEN, stated plainly.** Two independent reasons, and
-neither is a bug.
+**What is and is not reachable without a model, stated plainly.**
 
-*Case-law lights.* Every one of the 4090 classified edges is `FOLLOWED` or `MENTIONED`.
-The 176 edges that could carry a `DEPARTED` or `NARROWED` — the ones a departure marker or
-an extended panel flagged — are exactly the ones the router escalates to the reasoning
-model, and that model has not run. Structural signals alone cannot produce a red here:
-`QUASHED` needs the citing court to annul a decision *that is in the corpus*, and NSS
-mostly annuls regional-court decisions, which are filtered out at row-parse time because
-`decision.court_code` only admits the three seeded courts.
+*Red is reachable, and reached.* `QUASHED` is pure metadata — an ÚS výrok annulling a named
+decision — so it needs no inference. Loading the cited ÚS decisions was what unlocked it;
+before that the corpus was NSS-only and NSS mostly annuls regional-court decisions, which
+are filtered out at row-parse time because `decision.court_code` admits only the three
+seeded courts.
 
-*Provision lights.* 687 decisions are exposed to a rewording, but `material` defaults to
-false until a model judges the version pair, and rule 2 forbids an amber with no evidence
-row behind it.
+*The rest of the spectrum is not.* `DEPARTED` and `NARROWED` are readings of reasoning, and
+every edge that might carry one is exactly what the router escalates to the reasoning tier.
+`ProvisionReworded` amber needs a materiality verdict on the version pair, and rule 2 forbids
+an amber with no evidence row behind it, so `material` stays false until a model judges it.
 
-So the honest summary is that the **detection** layer works on real data at real scale and
-the **judgement** layer is one API key away. Widening the crawl further still helps the
-citation graph — going from 4 months to 16 doubled decision-to-decision resolution — but it
-will not by itself produce a non-GREEN light.
+So: the **detection** layer works on real data at real scale, the **structural** verdicts are
+live, and the **inferential** ones are one API key away. Widening the crawl still helps the
+citation graph — 4 months to 16 doubled decision-to-decision resolution — but on its own it
+buys coverage, not new kinds of verdict.

@@ -23,6 +23,7 @@ from jg.classify.structural import (
     CONFIDENCE_QUASHED,
     RULESET_VERSION,
     CitationEdge,
+    annulment_is_chronological,
     as_panel_type,
     citation_sentence,
     classify_structural,
@@ -218,6 +219,64 @@ def test_quashed_span_needs_a_verdict(verdict):
 def test_quashed_span_needs_at_least_one_identifier():
     assert quashed_span(VERDICT_QUASHING_CITED, ()) is None
     assert quashed_span(VERDICT_QUASHING_CITED, ("", "   ")) is None
+
+
+# --- the chronology guard on QUASHED ------------------------------------------------------
+
+
+def test_quashed_is_refused_when_the_cited_decision_postdates_the_annulment():
+    """A court cannot annul a decision that did not exist yet.
+
+    Regression, and it was a real false red: a citation to an annulled decision resolved to
+    the *later* decision the same court issued on remand, so the výrok rule fired against a
+    decision decided after the annulment. Four of nine QUASHED rows in the first real run
+    were this shape.
+    """
+    candidate = edge(
+        citing_date=dt.date(2018, 10, 25),
+        cited_date=dt.date(2020, 5, 28),
+        verdict_text=VERDICT_QUASHING_CITED,
+    )
+    assert annulment_is_chronological(candidate) is False
+    # The výrok rule is refused; the edge still falls through to the remaining tier-1 rules.
+    result = classify_structural(candidate)
+    assert result is None or result.label is not TreatmentLabel.QUASHED
+
+
+def test_quashed_is_allowed_when_the_cited_decision_predates_the_annulment():
+    candidate = edge(
+        citing_date=dt.date(2021, 8, 24),
+        cited_date=dt.date(2020, 10, 29),
+        verdict_text=VERDICT_QUASHING_CITED,
+    )
+    assert annulment_is_chronological(candidate) is True
+    result = classify_structural(candidate)
+    assert result is not None
+    assert result.label is TreatmentLabel.QUASHED
+    assert result.confidence == CONFIDENCE_QUASHED
+
+
+@pytest.mark.parametrize(
+    ("citing_date", "cited_date"),
+    [(None, dt.date(2020, 1, 1)), (dt.date(2021, 1, 1), None), (None, None)],
+)
+def test_quashed_is_refused_when_a_date_is_missing(citing_date, cited_date):
+    """An unverifiable annulment is refused, not assumed. D8: a false red is unacceptable."""
+    candidate = edge(
+        citing_date=citing_date, cited_date=cited_date, verdict_text=VERDICT_QUASHING_CITED
+    )
+    assert annulment_is_chronological(candidate) is False
+    result = classify_structural(candidate)
+    assert result is None or result.label is not TreatmentLabel.QUASHED
+
+
+def test_same_day_annulment_is_refused():
+    """Strictly before, not on or before: a decision annulled the day it issued is not a
+    thing, and treating equality as valid would readmit the self-citation case."""
+    same = dt.date(2021, 8, 24)
+    assert annulment_is_chronological(
+        edge(citing_date=same, cited_date=same, verdict_text=VERDICT_QUASHING_CITED)
+    ) is False
 
 
 # --- departure markers, tier 2's trigger -------------------------------------------------

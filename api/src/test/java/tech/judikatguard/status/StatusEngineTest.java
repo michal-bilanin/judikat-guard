@@ -146,6 +146,50 @@ class StatusEngineTest {
     }
 
     @Test
+    @DisplayName("the same fact stated by several rows is listed once")
+    void identicalReasonsAreCollapsed() {
+        // One decision citing another in three paragraphs is three `citation` rows and so
+        // three identical treatment rows, all quoting the one výrok. Observed on real data:
+        // IV. ÚS 3523/20 annuls č. j. 5 Afs 470/2019-33 and names it in paragraphs 2, 3 and 4,
+        // which listed the annulment three times over. Reasons are value records, so equal
+        // ones are the same fact, and repeating it pads the evidence panel without adding
+        // evidence.
+        EvidenceRow first = row("TEST-Q1", TreatmentLabel.QUASHED, "1.00", "2021-08-24", false);
+        List<EvidenceRow> rows = List.of(
+                first,
+                new EvidenceRow(
+                        first.citationId() + 1, first.citingEcli(), first.citingCourt(),
+                        first.citingPanel(), first.citingDate(), first.label(),
+                        first.confidence(), first.evidenceSpan(), 3, first.citingMayDepart()),
+                new EvidenceRow(
+                        first.citationId() + 2, first.citingEcli(), first.citingCourt(),
+                        first.citingPanel(), first.citingDate(), first.label(),
+                        first.confidence(), first.evidenceSpan(), 4, first.citingMayDepart()));
+
+        Status status = StatusEngine.evaluate(evaluationOf(rows, List.of(), List.of()));
+
+        assertThat(status.light()).isEqualTo(Light.RED);
+        assertThat(status.reasons())
+                .containsExactly(new Reason.Quashed("TEST-Q1", span("TEST-Q1")));
+    }
+
+    @Test
+    @DisplayName("distinct findings from the same decision are both kept")
+    void differentSpansFromOneDecisionAreNotCollapsed() {
+        // Guard against over-collapsing: same citing decision, genuinely different spans.
+        EvidenceRow base = row("TEST-N9", TreatmentLabel.NARROWED, "0.90", "2020-01-01", false);
+        EvidenceRow other = new EvidenceRow(
+                base.citationId() + 1, base.citingEcli(), base.citingCourt(), base.citingPanel(),
+                base.citingDate(), base.label(), base.confidence(), "TEST- jiný nosný důvod.",
+                9, base.citingMayDepart());
+
+        Status status =
+                StatusEngine.evaluate(evaluationOf(List.of(base, other), List.of(), List.of()));
+
+        assertThat(status.reasons()).hasSize(2);
+    }
+
+    @Test
     @DisplayName("provision reasons are ordered by provision id and inherited ones by ECLI")
     void provisionAndInheritedReasonsAreStablyOrdered() {
         Status status = StatusEngine.evaluate(

@@ -325,6 +325,25 @@ def quashed_span(
     return None
 
 
+def annulment_is_chronological(edge: CitationEdge) -> bool:
+    """Could the citing decision actually have annulled the cited one?
+
+    A court cannot annul a decision that did not exist yet, so the cited decision must
+    predate the citing one. Cheap, absolute, and it catches a whole class of resolution
+    error that the výrok rule cannot see: when a citation is matched to the wrong decision
+    of the same case, the wrong one is very often the *later* decision issued on remand
+    after the annulment, which inverts the dates.
+
+    A missing date means the check cannot be made, and an unverifiable annulment is refused
+    rather than assumed. That costs recall on rows with no ``decided_on``; per D8 a false
+    red costs far more. Both dates come from ``decision.decided_on``, which is ``not null``,
+    so in practice this only bites when an edge was assembled without them.
+    """
+    if edge.citing_date is None or edge.cited_date is None:
+        return False
+    return edge.cited_date < edge.citing_date
+
+
 def classify_structural(
     edge: CitationEdge, markers: MarkerSet | None = None
 ) -> TreatmentResult | None:
@@ -338,7 +357,7 @@ def classify_structural(
     active = markers or marker_set()
 
     span = quashed_span(edge.verdict_text, edge.identifiers(), active)
-    if span is not None:
+    if span is not None and annulment_is_chronological(edge):
         return _result(edge, TreatmentLabel.QUASHED, CONFIDENCE_QUASHED, span)
 
     span = party_submission_span(edge.citing_paragraph, edge.raw_text, active)

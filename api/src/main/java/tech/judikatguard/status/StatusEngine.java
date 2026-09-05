@@ -4,8 +4,10 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * The verdict layer. PLAN.md section 9.
@@ -131,9 +133,16 @@ public final class StatusEngine {
         }
 
         Light light = !red.isEmpty() ? Light.RED : !amber.isEmpty() ? Light.AMBER : Light.GREEN;
-        List<Reason> reasons = new ArrayList<>(red.size() + amber.size());
-        reasons.addAll(red);
-        reasons.addAll(amber);
+
+        // Distinct, preserving table order. Reasons are value records, so two that compare
+        // equal are the same fact stated twice, not two findings. That happens routinely:
+        // one decision often cites another in several paragraphs, which is several rows in
+        // `citation` and therefore several identical treatment rows, all quoting the one
+        // výrok. Listing an annulment three times would pad the evidence panel without
+        // adding evidence, and the reader cannot tell the copies apart.
+        Set<Reason> seen = new LinkedHashSet<>(red);
+        seen.addAll(amber);
+        List<Reason> reasons = List.copyOf(seen);
 
         return new Status(e.ecli(), light, asOf, e.corpusSize(), e.corpusThrough(), reasons);
     }

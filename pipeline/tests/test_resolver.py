@@ -73,11 +73,18 @@ def test_normalize_alias_keeps_the_sheet_number_distinct():
 # --- alias candidates ---------------------------------------------------------------------
 
 
-def test_alias_candidates_for_ref_no_tries_the_sheet_form_first():
+def test_alias_candidates_for_ref_no_with_a_sheet_does_not_fall_back_to_the_case_no():
+    """A č. j. with a sheet number resolves only on the full form.
+
+    Regression. The bare spisová značka is shared by every decision the same case ever
+    produced, so falling back to it matched the wrong decision — in the observed case the
+    *later* one issued on remand after the Constitutional Court annulled the cited one,
+    which made the system report a valid decision as quashed. See PLAN.md section 18.
+    """
     reference = ref(
         ReferenceKind.REF_NO, f"č. j. {REF_NO}-{SHEET_NO}", ref_no=REF_NO, sheet_no=SHEET_NO
     )
-    assert alias_candidates(reference) == ["6 ads 45/2014-32", "6 ads 45/2014"]
+    assert alias_candidates(reference) == ["6 ads 45/2014-32"]
 
 
 def test_alias_candidates_for_ref_no_without_sheet():

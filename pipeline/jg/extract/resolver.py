@@ -44,8 +44,18 @@ def normalize_alias(raw: str) -> str:
 def alias_candidates(ref: Reference) -> list[str]:
     """Normalised alias strings to try for one reference, most specific first.
 
-    A č. j. carrying a sheet number is tried with the sheet first and without it second,
-    because the corpus may hold either form and the fuller one is the better match.
+    A č. j. that carries a sheet number resolves **only** on the full form. It deliberately
+    does not fall back to the bare spisová značka, because a case number is not unique to a
+    decision: one case yields several decisions over the years, each with its own sheet
+    number, and they all share the spisová značka.
+
+    That fallback used to exist and it manufactured false red lights. A citation to
+    ``č. j. 3 As 205/2016-38`` (decided 2017, and annulled by the Constitutional Court)
+    fell back to the alias ``3 as 205/2016``, which the corpus had registered against
+    ``3 As 205/2016-63`` — the *later* decision the same court issued in 2020 *after* that
+    annulment, on remand. The system then reported the current, perfectly good decision as
+    quashed. Losing a match is a coverage gap, which the product states openly; matching the
+    wrong decision is a false red, which D8 rules out.
     """
     raw: list[str] = []
     match ref.kind:
@@ -54,7 +64,8 @@ def alias_candidates(ref: Reference) -> list[str]:
             sheet_no = ref.groups.get("sheet_no")
             if ref_no and sheet_no:
                 raw.append(f"{ref_no}-{sheet_no}")
-            if ref_no:
+            elif ref_no:
+                # No sheet number in the citation, so the spisová značka is all there is.
                 raw.append(ref_no)
         case ReferenceKind.CASE_NO:
             case_no = ref.groups.get("case_no")

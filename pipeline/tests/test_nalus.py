@@ -351,6 +351,10 @@ def test_the_us_vyrok_produces_a_structural_quashed(quashing_html: str):
         citing_date=raw.decided_on,
         cited_ecli="ECLI:CZ:NSS:2020:5.Afs.470.2019.33",
         cited_court="NSS",
+        # The annulled judgment's real date, from the NSS corpus. Required: the výrok rule
+        # is gated on the annulled decision predating the annulment, so an edge with no
+        # cited_date is refused rather than assumed. See annulment_is_chronological.
+        cited_date=dt.date(2020, 10, 29),
         cited_aliases=(
             normalize_alias("5 Afs 470/2019"),
             normalize_alias(ANNULLED_REF_NO),
@@ -358,6 +362,7 @@ def test_the_us_vyrok_produces_a_structural_quashed(quashing_html: str):
         raw_text="č. j. 5 Afs 470/2019-33",
         verdict_text=raw.verdict_text,
     )
+    assert edge.cited_date < edge.citing_date, "the annulment must postdate what it annuls"
     result = classify_structural(edge, marker_set())
     assert result is not None
     assert result.label is TreatmentLabel.QUASHED
