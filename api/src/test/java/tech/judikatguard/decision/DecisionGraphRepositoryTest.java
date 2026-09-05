@@ -47,6 +47,7 @@ class DecisionGraphRepositoryTest extends PostgresBackedTest {
     private static final LocalDate AS_OF = LocalDate.parse("2026-09-01");
 
     @Autowired JdbcClient jdbc;
+    @Autowired DecisionRepository decisions;
     @Autowired EvidenceRepository evidence;
     @Autowired ProvisionRepository provisions;
     @Autowired CorpusRepository corpus;
@@ -262,6 +263,39 @@ class DecisionGraphRepositoryTest extends PostgresBackedTest {
                     provisions.reliedOn(List.of(RELIES), asOf).getOrDefault(RELIES, List.of());
             assertThat(found).hasSize(1);
             return found.getFirst();
+        }
+    }
+
+    @Nested
+    @DisplayName("source links")
+    class SourceUrls {
+
+        @Test
+        @DisplayName("an ECLI in the corpus maps to the page it was crawled from")
+        void mapsKnownEclis() {
+            insertDecision(CITED, "NSS", "panel", "2015-03-12");
+            insertDecision(EXTENDED, "NSS", "extended", "2018-06-01");
+
+            assertThat(decisions.sourceUrls(List.of(CITED, EXTENDED)))
+                    .containsOnlyKeys(CITED, EXTENDED)
+                    .containsEntry(CITED, "https://example.invalid/" + CITED);
+        }
+
+        @Test
+        @DisplayName("an ECLI outside the corpus is absent, never mapped to null")
+        void omitsUnknownEclis() {
+            insertDecision(CITED, "NSS", "panel", "2015-03-12");
+
+            // The evidence panel checks for a key. A key present with a null or empty value
+            // would render as an anchor going nowhere, which reads as a working link to a
+            // document we do not hold.
+            assertThat(decisions.sourceUrls(List.of(CITED, PANEL))).containsOnlyKeys(CITED);
+        }
+
+        @Test
+        @DisplayName("no ECLIs means no query")
+        void emptyIsEmpty() {
+            assertThat(decisions.sourceUrls(List.of())).isEmpty();
         }
     }
 

@@ -2,6 +2,7 @@ package tech.judikatguard.web;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import tech.judikatguard.document.ReasonView;
 import tech.judikatguard.document.StatusService.Evaluated;
@@ -17,6 +18,8 @@ import tech.judikatguard.status.Status;
  *
  * @param verdict the Czech scope sentence. GREEN carries the "no adverse treatment found"
  *     phrasing that CLAUDE.md rule 2 requires, never the word <em>platný</em>
+ * @param links the same ECLI-to-court-page table as {@code DocumentReport}, so a client
+ *     reading one decision can open the evidence for itself without a second round trip
  */
 public record StatusView(
         String ecli,
@@ -25,7 +28,8 @@ public record StatusView(
         int corpusSize,
         LocalDate corpusThrough,
         String verdict,
-        List<ReasonView> reasons) {
+        List<ReasonView> reasons,
+        Map<String, String> links) {
 
     public StatusView {
         Objects.requireNonNull(ecli, "ecli");
@@ -34,9 +38,14 @@ public record StatusView(
         Objects.requireNonNull(corpusThrough, "corpusThrough");
         Objects.requireNonNull(verdict, "verdict");
         reasons = List.copyOf(reasons);
+        links = Map.copyOf(links);
     }
 
-    public static StatusView of(Evaluated evaluated) {
+    /**
+     * @param links resolved by the controller, which owns the repository; this record stays
+     *     a pure projection of an {@link Evaluated}
+     */
+    public static StatusView of(Evaluated evaluated, Map<String, String> links) {
         Status status = evaluated.status();
         List<ReasonView> reasons = evaluated.reasons();
         return new StatusView(
@@ -50,6 +59,7 @@ public record StatusView(
                         status.corpusSize(),
                         status.corpusThrough(),
                         Wording.phrase(status.light(), reasons)),
-                reasons);
+                reasons,
+                links);
     }
 }

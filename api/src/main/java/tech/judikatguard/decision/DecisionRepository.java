@@ -33,6 +33,12 @@ public final class DecisionRepository {
              order by idx
             """;
 
+    private static final String SOURCE_URLS_SQL = """
+            select ecli, source_url
+              from decision
+             where ecli in (:eclis)
+            """;
+
     private static final RowMapper<DecisionSummary> MAPPER = (rs, rowNum) -> new DecisionSummary(
             rs.getString("ecli"),
             rs.getString("court_code"),
@@ -79,4 +85,39 @@ public final class DecisionRepository {
     public List<String> paragraphs(String ecli) {
         return jdbc.sql(PARAGRAPHS_SQL).param("ecli", ecli).query(String.class).list();
     }
+
+    /**
+     * ECLI to the address the decision was crawled from — the court's own published text.
+     *
+     * <p>This is the link the evidence panel hangs on a citing decision, and it matters more
+     * than it looks: the panel quotes a span and says which decision it came from, and until
+     * the reader can open that decision themselves, they are taking our word for it. The URL
+     * is the crawled {@code source_url}, not a pattern assembled from the ECLI, so a link
+     * either points at the page the text actually came from or is absent.
+     *
+     * <p>Missing ECLIs are simply absent from the map, and the caller renders those as plain
+     * text. A decision we have no record of gets no link, which is the same answer the
+     * unresolved panel gives: silence rather than a guess.
+     */
+    public Map<String, String> sourceUrls(Collection<String> eclis) {
+        if (eclis.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> byEcli = new LinkedHashMap<>();
+        jdbc.sql(SOURCE_URLS_SQL)
+                .param("eclis", List.copyOf(eclis))
+                .query((rs, rowNum) -> new Link(rs.getString("ecli"), rs.getString("source_url")))
+                .list()
+                .forEach(link -> {
+                    // The column is not null, but an empty string would render as an anchor
+                    // pointing at the report itself. No href beats a href that goes nowhere.
+                    if (!link.url().isBlank()) {
+                        byEcli.put(link.ecli(), link.url());
+                    }
+                });
+        return Map.copyOf(byEcli);
+    }
+
+    /** One row of {@link #sourceUrls}. */
+    private record Link(String ecli, String url) {}
 }

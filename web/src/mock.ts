@@ -91,6 +91,11 @@ export const MOCK_REPORT: DocumentReport = {
       reasons: [],
     },
   ],
+  // Empty on purpose. Every ECLI above is either a `TEST-` placeholder or a decision
+  // outside the crawled window, so none of them has a court page we could honestly point
+  // at, and inventing one would be inventing an identifier. The sample report therefore
+  // exercises the unlinked rendering; the links show up when the API is answering.
+  links: {},
   unresolved: [
     { rawText: 'citovaného rozhodnutí', reason: 'not resolved' },
     { rawText: 'usnesení NS, sp. zn. TEST-4 Cdo 4/2004', reason: 'not in corpus' },

@@ -431,11 +431,14 @@ GET  /api/corpus                              size + coverage dates per court
       "reasons": [ { "kind": "NARROWED", "byEcli": "...", "span": "...", "paragraph": 34 } ]
     }
   ],
+  "links": { "ECLI:CZ:NSS:2024:2.As.103.2023.47": "https://vyhledavac.nssoud.cz/..." },
   "unresolved": [ { "rawText": "...", "reason": "not in corpus" } ]
 }
 ```
 
 `unresolved` is a first-class field, not an error. Being explicit about coverage gaps is the product.
+
+`links` maps every ECLI the report names — sources, citing decisions, chain links — to the crawled `decision.source_url`, so the evidence panel can open the court's own page. One table rather than a URL per reason: a citing decision that produced three reasons is still one decision. The value is the address the text was actually fetched from, never a pattern assembled from the ECLI, and an ECLI outside the corpus is simply absent so the UI renders it as plain text. `GET /api/decisions/{ecli}/status` carries the same field. Verifying a span against the source is the whole point of quoting one, and a reader who cannot reach the source is still taking our word for it.
 
 Document check runs extraction on the uploaded text and then reads the existing graph. The only new work is extraction; no batch classification at request time.
 

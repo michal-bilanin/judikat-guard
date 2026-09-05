@@ -69,6 +69,9 @@ class ApiEndpointsTest {
 
     private static final String NARROWING_ECLI = "TEST-ECLI-NSS-NARROWED";
 
+    /** A {@code .invalid} host, so a fixture link can never reach a real court. */
+    private static final String NARROWING_URL = "https://example.invalid/" + NARROWING_ECLI;
+
     private static final String SPAN =
             "TEST- Závěr se uplatní pouze tam, kde účastník unesl břemeno tvrzení.";
 
@@ -247,8 +250,25 @@ class ApiEndpointsTest {
                     .andExpect(jsonPath("$.sources[0].reasons[0].byEcli").value(NARROWING_ECLI))
                     .andExpect(jsonPath("$.sources[0].reasons[0].span").value(SPAN))
                     .andExpect(jsonPath("$.sources[0].reasons[0].paragraph").value(34))
+                    .andExpect(jsonPath("$.links['" + NARROWING_ECLI + "']").value(NARROWING_URL))
                     .andExpect(jsonPath("$.unresolved[0].rawText").value("citovaného rozhodnutí"))
                     .andExpect(jsonPath("$.unresolved[0].reason").value("not resolved"));
+        }
+
+        @Test
+        @DisplayName("an ecli with no link is absent from 'links' rather than mapped to null")
+        void linksOmitWhatIsNotInTheCorpus() throws Exception {
+            // The cited source itself has no entry here. The evidence panel must render it as
+            // plain text: an anchor with an empty href would look like a working link to a
+            // document we do not have.
+            given(checker.check(anyString())).willReturn(report());
+
+            mvc.perform(post("/api/documents/check")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"text\": \"TEST- text s odkazem.\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.links['" + ECLI + "']").doesNotExist())
+                    .andExpect(jsonPath("$.links").isMap());
         }
 
         @Test
@@ -259,6 +279,7 @@ class ApiEndpointsTest {
                     Map.of("NSS", new CorpusCoverage(3142, THROUGH)),
                     List.of(new SourceReport(
                             null, "§ 2000 odst. 1 zákona č. 89/2012 Sb.", Light.GREEN, List.of())),
+                    Map.of(),
                     List.of()));
 
             mvc.perform(post("/api/documents/check")
@@ -273,7 +294,7 @@ class ApiEndpointsTest {
         @DisplayName("'unresolved' is always present, empty array included")
         void unresolvedIsAlwaysPresent() throws Exception {
             given(checker.check(anyString())).willReturn(new DocumentReport(
-                    AS_OF, Map.of(), List.of(), List.of()));
+                    AS_OF, Map.of(), List.of(), Map.of(), List.of()));
 
             mvc.perform(post("/api/documents/check")
                             .contentType(MediaType.APPLICATION_JSON)
@@ -380,6 +401,7 @@ class ApiEndpointsTest {
                         List.of(new ReasonView(
                                 ReasonView.NARROWED, NARROWING_ECLI, SPAN, 34, null, null, null,
                                 null, null)))),
+                Map.of(NARROWING_ECLI, NARROWING_URL),
                 List.of(new UnresolvedReference("citovaného rozhodnutí", "not resolved")));
     }
 }

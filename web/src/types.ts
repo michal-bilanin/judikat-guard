@@ -69,6 +69,16 @@ export type DocumentReport = {
   asOf: string;
   corpus: Record<string, CorpusCoverage>;
   sources: SourceReport[];
+  /**
+   * ECLI to the court page the decision was crawled from. One table for the whole report
+   * rather than a URL on every reason, because one citing decision routinely produces
+   * several reasons.
+   *
+   * An ECLI the corpus does not hold is simply missing, and the panel renders it as plain
+   * text. Read it with `links[ecli]` and check for undefined; never fall back to a
+   * constructed URL, because a link that guesses is worse than no link at all.
+   */
+  links: Record<string, string>;
   unresolved: UnresolvedRef[];
 };
 

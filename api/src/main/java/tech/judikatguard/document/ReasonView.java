@@ -2,10 +2,13 @@ package tech.judikatguard.document;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import tech.judikatguard.status.EvidenceRow;
 import tech.judikatguard.status.Reason;
@@ -54,6 +57,28 @@ public record ReasonView(
 
     public ReasonView {
         Objects.requireNonNull(kind, "kind");
+    }
+
+    /**
+     * Every decision these reasons name, in the order they are named.
+     *
+     * <p>Used to build the report's link table. The URL is deliberately <em>not</em> a field
+     * of this record: a reason is the evidence, and the same citing decision routinely
+     * appears in several of them, so one entry in a table beside the report says it once
+     * instead of repeating an address on every row. It also keeps this record a flattening
+     * of {@link Reason} and nothing else.
+     */
+    public static Set<String> linkTargets(Collection<ReasonView> reasons) {
+        Set<String> eclis = new LinkedHashSet<>();
+        for (ReasonView reason : reasons) {
+            if (reason.byEcli() != null) {
+                eclis.add(reason.byEcli());
+            }
+            if (reason.viaEcli() != null) {
+                eclis.add(reason.viaEcli());
+            }
+        }
+        return eclis;
     }
 
     /**

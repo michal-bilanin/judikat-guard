@@ -1,11 +1,15 @@
 package tech.judikatguard.web;
 
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import tech.judikatguard.decision.DecisionRepository;
+import tech.judikatguard.document.ReasonView;
 import tech.judikatguard.document.StatusService;
 
 /**
@@ -43,7 +47,10 @@ public class DecisionController {
         if (decisions.find(ecli).isEmpty()) {
             throw notFound(ecli);
         }
-        return StatusView.of(statuses.evaluate(ecli));
+        StatusService.Evaluated evaluated = statuses.evaluate(ecli);
+        Set<String> linked = new LinkedHashSet<>(List.of(ecli));
+        linked.addAll(ReasonView.linkTargets(evaluated.reasons()));
+        return StatusView.of(evaluated, decisions.sourceUrls(linked));
     }
 
     private static NotFoundException notFound(String ecli) {

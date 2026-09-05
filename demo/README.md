@@ -23,6 +23,11 @@ What to point at when showing it:
 - Expand the red row. The span is the citing court's own sentence, and
   `Rozhodovací těleso: rozšířený senát` is *why* it was allowed to depart — that comes from
   the `departure_authority` table, not from the model.
+- Every ECLI in the panel is a link to the court's own page (`Citující rozhodnutí`,
+  `Přiřazeno k`, `Oslabený zdroj v řetězci`). It opens the decision the span was quoted
+  from, so the audience can check the quotation against the source rather than against us.
+  The address is the one the crawler fetched, so a decision the corpus does not hold has no
+  link at all instead of a guessed one.
 - The amber row has two reasons from two different decisions. That is the difference between
   a system that quotes evidence and one that asserts a conclusion.
 - The unresolved row is the honest half. The corpus has holes and the page says so instead

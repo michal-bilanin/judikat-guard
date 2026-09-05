@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.springframework.stereotype.Service;
+import tech.judikatguard.decision.DecisionRepository;
 import tech.judikatguard.decision.ProvisionRepository;
 import tech.judikatguard.document.StatusService.Evaluated;
 import tech.judikatguard.extract.CitationExtractor;
@@ -34,16 +35,19 @@ public final class DocumentChecker {
     private final ReferenceResolver resolver;
     private final StatusService statuses;
     private final ProvisionRepository provisions;
+    private final DecisionRepository decisions;
 
     public DocumentChecker(
             CitationExtractor extractor,
             ReferenceResolver resolver,
             StatusService statuses,
-            ProvisionRepository provisions) {
+            ProvisionRepository provisions,
+            DecisionRepository decisions) {
         this.extractor = Objects.requireNonNull(extractor, "extractor");
         this.resolver = Objects.requireNonNull(resolver, "resolver");
         this.statuses = Objects.requireNonNull(statuses, "statuses");
         this.provisions = Objects.requireNonNull(provisions, "provisions");
+        this.decisions = Objects.requireNonNull(decisions, "decisions");
     }
 
     public DocumentReport check(String text) {
@@ -96,7 +100,28 @@ public final class DocumentChecker {
                 context.asOf(),
                 context.corpus().get().courts(),
                 sources,
+                links(sources),
                 List.copyOf(unresolved));
+    }
+
+    /**
+     * The court page behind every decision the report names, in one query.
+     *
+     * <p>Collected from the assembled report rather than from the resolved references,
+     * because the decisions worth linking are mostly not the ones the document cited: they
+     * are the ones that <em>treated</em> those, which the reader has never seen and has the
+     * most reason to want to open.
+     */
+    private Map<String, String> links(List<SourceReport> sources) {
+        Set<String> eclis = new LinkedHashSet<>();
+        for (SourceReport source : sources) {
+            String ecli = source.ecli();
+            if (ecli != null) {
+                eclis.add(ecli);
+            }
+            eclis.addAll(ReasonView.linkTargets(source.reasons()));
+        }
+        return decisions.sourceUrls(eclis);
     }
 
     /**

@@ -13,12 +13,32 @@ import {
   verdictPhrase,
 } from '../czech';
 
-type MetaRow = { term: string; value: string; code?: boolean };
+type MetaRow = { term: string; value: string; code?: boolean; href?: string };
 
-function metaRows(reason: Reason): MetaRow[] {
+/**
+ * The evidence panel quotes a span and names the decision it came from. Until the reader
+ * can open that decision, they are taking our word for it — so wherever the report carries
+ * a link for an ECLI, the ECLI becomes one. A missing entry renders as plain text: no
+ * constructed URLs, because a link that guesses where a decision lives is worse than none.
+ */
+function metaRows(reason: Reason, links: Record<string, string>): MetaRow[] {
   const rows: MetaRow[] = [];
-  if (reason.byEcli) rows.push({ term: 'Citující rozhodnutí', value: reason.byEcli, code: true });
-  if (reason.viaEcli) rows.push({ term: 'Oslabený zdroj v řetězci', value: reason.viaEcli, code: true });
+  if (reason.byEcli) {
+    rows.push({
+      term: 'Citující rozhodnutí',
+      value: reason.byEcli,
+      code: true,
+      href: links[reason.byEcli],
+    });
+  }
+  if (reason.viaEcli) {
+    rows.push({
+      term: 'Oslabený zdroj v řetězci',
+      value: reason.viaEcli,
+      code: true,
+      href: links[reason.viaEcli],
+    });
+  }
   const panel = panelName(reason.panel);
   if (panel) rows.push({ term: 'Rozhodovací těleso', value: panel });
   if (reason.paragraph !== null && reason.paragraph !== undefined) {
@@ -34,8 +54,37 @@ function metaRows(reason: Reason): MetaRow[] {
   return rows;
 }
 
-function ReasonBlock({ reason, light }: { reason: Reason; light: Light }) {
-  const rows = metaRows(reason);
+/**
+ * A monospaced identifier, linked to the court's own page when the report knows one.
+ * Rows that are not ECLIs (the provision id) never carry an href and render unchanged.
+ */
+function Identifier({ text, href }: { text: string; href?: string }) {
+  if (!href) return <code>{text}</code>;
+  return (
+    <a
+      className="sourceLink"
+      href={href}
+      target="_blank"
+      // noopener because the target is a third-party court site we do not control.
+      rel="noreferrer noopener"
+      title="Otevřít rozhodnutí na stránkách soudu (nová karta)"
+    >
+      <code>{text}</code>
+      <span aria-hidden="true"> ↗</span>
+    </a>
+  );
+}
+
+function ReasonBlock({
+  reason,
+  light,
+  links,
+}: {
+  reason: Reason;
+  light: Light;
+  links: Record<string, string>;
+}) {
+  const rows = metaRows(reason, links);
   return (
     <article className="reason">
       <header className="reason__head">
@@ -61,7 +110,9 @@ function ReasonBlock({ reason, light }: { reason: Reason; light: Light }) {
           {rows.map((row) => (
             <div key={row.term} className="reason__metaRow">
               <dt>{row.term}</dt>
-              <dd>{row.code ? <code>{row.value}</code> : row.value}</dd>
+              <dd>
+                {row.code ? <Identifier text={row.value} href={row.href} /> : row.value}
+              </dd>
             </div>
           ))}
         </dl>
@@ -76,6 +127,8 @@ function SourceItem({ source, report }: { source: SourceReport; report: Document
   const [open, setOpen] = useState(false);
   const phrase = verdictPhrase(source.light, source.reasons);
   const scope = corpusScope(report.corpus);
+  // Tolerates an API build older than this page: no links rather than a blank report.
+  const links = report.links ?? {};
 
   return (
     <li className={`source source--${source.light}`}>
@@ -100,7 +153,7 @@ function SourceItem({ source, report }: { source: SourceReport; report: Document
           <p className="source__scope">{sourceScopeSentence(report.asOf, scope, phrase)}</p>
           {source.ecli && (
             <p className="source__ecli">
-              Přiřazeno k <code>{source.ecli}</code>
+              Přiřazeno k <Identifier text={source.ecli} href={links[source.ecli]} />
             </p>
           )}
           {source.reasons.length === 0 ? (
@@ -115,6 +168,7 @@ function SourceItem({ source, report }: { source: SourceReport; report: Document
                 key={`${reason.kind}-${reason.byEcli ?? reason.viaEcli ?? idx}-${idx}`}
                 reason={reason}
                 light={source.light}
+                links={links}
               />
             ))
           )}

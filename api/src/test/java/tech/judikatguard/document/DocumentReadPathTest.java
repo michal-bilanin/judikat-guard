@@ -8,23 +8,27 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import tech.judikatguard.decision.AliasRepository;
 import tech.judikatguard.decision.Corpus;
 import tech.judikatguard.decision.CorpusCoverage;
+import tech.judikatguard.decision.DecisionRepository;
 import tech.judikatguard.decision.ProvisionRepository;
 import tech.judikatguard.decision.ProvisionRepository.ProvisionKey;
 import tech.judikatguard.document.StatusService.Evaluated;
 import tech.judikatguard.extract.CitationExtractor;
 import tech.judikatguard.extract.Reference;
 import tech.judikatguard.status.Light;
+import tech.judikatguard.status.Reason;
 import tech.judikatguard.status.Status;
 
 /**
@@ -58,6 +62,7 @@ class DocumentReadPathTest {
     private final CitationExtractor extractor = CitationExtractor.withSharedPatterns();
 
     @Mock AliasRepository aliases;
+    @Mock DecisionRepository decisions;
     @Mock ProvisionRepository provisions;
     @Mock StatusService statuses;
 
@@ -196,6 +201,30 @@ class DocumentReadPathTest {
         }
 
         @Test
+        @DisplayName("the link table is asked for the citing decisions, not just the sources")
+        void linksCoverCitingDecisions() {
+            String citing = "TEST-ECLI-NSS-NARROWED";
+            String url = "https://example.invalid/" + citing;
+            given(aliases.resolve(anyCollection()))
+                    .willReturn(Map.of("6 ads 45/2014-32", ECLI));
+            given(provisions.resolve(anyCollection())).willReturn(Map.of());
+            given(provisions.directlyCited(anyCollection(), any())).willReturn(Map.of());
+            given(statuses.evaluateAll(anyCollection()))
+                    .willReturn(Map.of(ECLI, narrowedBy(ECLI, citing)));
+            given(decisions.sourceUrls(anyCollection())).willReturn(Map.of(citing, url));
+
+            DocumentReport report = check(REF_NO_TEXT);
+
+            // The decision the reader has never seen is the one they most need to open, so
+            // the citing ECLI has to reach the repository even though the document never
+            // named it.
+            ArgumentCaptor<Collection<String>> asked = ArgumentCaptor.captor();
+            verify(decisions).sourceUrls(asked.capture());
+            assertThat(asked.getValue()).contains(ECLI, citing);
+            assertThat(report.links()).containsExactly(Map.entry(citing, url));
+        }
+
+        @Test
         @DisplayName("a document with no citations reports empty arrays, not an error")
         void nothingToReport() {
             given(aliases.resolve(anyCollection())).willReturn(Map.of());
@@ -217,7 +246,8 @@ class DocumentReadPathTest {
                 extractor,
                 new ReferenceResolver(aliases, provisions),
                 statuses,
-                provisions);
+                provisions,
+                decisions);
         return EvaluationContext
                 .lazy(AS_OF, "proposition-check.v1", DocumentReadPathTest::corpus)
                 .callWith(() -> checker.check(text));
@@ -230,6 +260,19 @@ class DocumentReadPathTest {
     private static Evaluated green(String ecli) {
         return new Evaluated(
                 new Status(ecli, Light.GREEN, AS_OF, 3142, THROUGH, List.of()), List.of());
+    }
+
+    private static Evaluated narrowedBy(String ecli, String citing) {
+        return new Evaluated(
+                new Status(
+                        ecli,
+                        Light.AMBER,
+                        AS_OF,
+                        3142,
+                        THROUGH,
+                        List.of(new Reason.Narrowed(
+                                citing, "TEST- Závěr dopadá jen na řízení zahájená po novele."))),
+                List.of());
     }
 
     /** The single reference the rules pass finds in {@code text}. */
