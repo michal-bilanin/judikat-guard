@@ -48,7 +48,7 @@ from jg.config import (
     gemini_model_name,
     llm_provider,
 )
-from jg.llm_types import ModelCall, ModelUnavailable
+from jg.llm_types import ModelCall, ModelUnavailable, QuotaExhausted
 
 log = logging.getLogger(__name__)
 
@@ -345,6 +345,16 @@ def gemini_model(
                 sleep(delay)
                 continue
 
+            if response.status_code == 429:
+                # A 429 that outlived every retry is not a transient blip, it is the quota
+                # window. Raised as its own type so the batch runner can stop cleanly and
+                # tell the operator to come back, instead of reporting a model failure for
+                # what is really the end of today's budget.
+                raise QuotaExhausted(
+                    f"Gemini ({name}) quota exhausted: still HTTP 429 after {attempt} "
+                    f"retries. {excerpt(response.text)}",
+                    retry_after=retry_after_seconds(response),
+                )
             if response.status_code >= 400:
                 raise ModelUnavailable(
                     f"Gemini ({name}) returned HTTP {response.status_code} after "

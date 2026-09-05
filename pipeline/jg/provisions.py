@@ -59,6 +59,7 @@ from jg.crawl.esbirka import (
 )
 from jg.db import Conn
 from jg.gemini import provider_model
+from jg.llm_types import QuotaExhausted
 
 log = logging.getLogger(__name__)
 
@@ -804,14 +805,34 @@ def run_materiality(
     model: MaterialityCall | None = None,
     limit: int | None = None,
 ) -> tuple[int, int]:
-    """Judge every pending rewording. Returns ``(judged, skipped)``."""
+    """Judge every pending rewording. Returns ``(judged, skipped)``.
+
+    Commits after each pair, for the same reason ``jg.classify.router.run_classify`` does:
+    ``connect()`` rolls back on any exception, so holding a whole batch of independent
+    model calls in one transaction means a quota window discards every verdict the run
+    already paid for. A :class:`QuotaExhausted` stops the loop cleanly — what is done is
+    committed, ``pending_rewordings`` will not offer those pairs again, and running the
+    command later finishes the rest.
+    """
     pending = pending_rewordings(conn, as_of, limit=limit)
     judged = skipped = 0
     for pair in pending:
-        if judge_materiality(conn, pair, model=model) is None:
+        try:
+            verdict = judge_materiality(conn, pair, model=model)
+        except QuotaExhausted:
+            conn.commit()
+            log.warning(
+                "materiality: quota exhausted after %d judged, %d pair(s) left for a later "
+                "run; everything judged so far is committed",
+                judged,
+                len(pending) - judged - skipped,
+            )
+            break
+        if verdict is None:
             skipped += 1
         else:
             judged += 1
+        conn.commit()
     return judged, skipped
 
 

@@ -57,6 +57,7 @@ from jg.classify.structural import (
 from jg.config import llm_model_name, llm_provider, provider_api_key
 from jg.db import Conn, connect
 from jg.gemini import provider_model
+from jg.llm_types import QuotaExhausted
 from jg.models import PanelType, Route, TreatmentLabel, TreatmentResult
 
 log = logging.getLogger(__name__)
@@ -195,6 +196,34 @@ def route(
 
 
 # ---------------------------------------------------------------------- statistics
+
+
+def _interrupted_note(exc: ModelUnavailable, stats: RouterStats, queued: int) -> str:
+    """What to tell the operator when a batch stops early. Czech, and actionable.
+
+    The three things worth knowing are: the work is saved, how much is left, and whether to
+    change anything before trying again. A quota window means change nothing and come back;
+    any other cause means read the message.
+    """
+    done = sum(stats.reasoning.values())
+    remaining = queued - done
+    if isinstance(exc, QuotaExhausted):
+        wait = ""
+        if exc.retry_after:
+            minutes = exc.retry_after / 60
+            wait = (
+                f" Poskytovatel doporučuje počkat {exc.retry_after:.0f} s"
+                f"{f' (≈{minutes:.0f} min)' if minutes >= 1.5 else ''}."
+            )
+        return (
+            f"[yellow]Vyčerpána kvóta poskytovatele.[/yellow] Klasifikováno {done} hran, "
+            f"zbývá {remaining}.{wait} Hotová práce je uložena — stačí spustit "
+            "`make classify` znovu, až se okno kvóty obnoví; běh naváže tam, kde skončil."
+        )
+    return (
+        f"[red]Model přestal odpovídat:[/red] {exc}\n"
+        f"Klasifikováno {done} hran, zbývá {remaining}. Hotová práce je uložena."
+    )
 
 
 @dataclass
@@ -611,11 +640,30 @@ def run_classify(court: str | None = None, *, dry_run_only: bool | None = None) 
         except ModelUnavailable as exc:
             return report(note=f"[red]Model není k dispozici:[/red] {exc}")
 
+        # Commit per edge. `connect()` rolls back on any exception, and a run over a
+        # thousand paid or rate-limited calls will eventually meet one — a quota window, a
+        # dropped connection, a Ctrl-C. Holding it all in one transaction means the first
+        # such interruption discards every label the run bought, including the structural
+        # and triage rows written above it, and the next attempt starts from zero and hits
+        # the same wall. A batch of independent items is not one unit of work; each edge is.
+        # Committing here is what makes "run it again tomorrow" actually finish the corpus.
         cache = DbResponseCache(conn)
+        stopped: ModelUnavailable | None = None
         for escalation in escalations:
-            result = classify_edge(
-                escalation.edge, model=model, model_name=model_name, cache=cache
-            )
+            try:
+                result = classify_edge(
+                    escalation.edge, model=model, model_name=model_name, cache=cache
+                )
+            except ModelUnavailable as exc:
+                # Out of quota, or the provider went away. Everything before this point is
+                # already committed, so stop and say where we got to.
+                conn.commit()
+                stopped = exc
+                break
             write_treatment(conn, result)
+            conn.commit()
             stats.record_reasoning(result)
+
+        if stopped is not None:
+            return report(note=_interrupted_note(stopped, stats, len(escalations)))
         return report()

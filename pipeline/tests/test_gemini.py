@@ -58,6 +58,7 @@ from jg.gemini import (
     provider_model,
     retry_after_seconds,
 )
+from jg.llm_types import QuotaExhausted
 from jg.models import PanelType, Route, TreatmentLabel
 from jg.provisions import RESPONSE_SCHEMA as MATERIALITY_SCHEMA
 
@@ -646,3 +647,47 @@ def test_the_pacing_interval_comes_from_the_environment(monkeypatch: pytest.Monk
     assert gemini_min_interval() == GEMINI_MIN_INTERVAL_DEFAULT, "a typo must not fail a batch"
     monkeypatch.delenv("JG_GEMINI_MIN_INTERVAL")
     assert gemini_min_interval() == GEMINI_MIN_INTERVAL_DEFAULT
+
+
+# ------------------------------------------------------- quota exhaustion is its own state
+
+
+QUOTA_BODY = {
+    "error": {
+        "message": (
+            "You exceeded your current quota, please check your plan and billing details. "
+            "* Quota exceeded for metric: "
+            "generativelanguage.googleapis.com/generate_content_free_tier_requests, "
+            "limit: 500, model: gemini-3.5-flash-lite\nPlease retry in 46.830458014s."
+        ),
+        "code": "too_many_requests",
+    }
+}
+
+
+def test_a_429_that_outlives_every_retry_is_quota_exhaustion_not_a_model_failure():
+    """The distinction the operator acts on: come back later versus something is wrong.
+
+    A transient 429 is retried. One that survives every retry is the quota window, and the
+    batch runner stops cleanly on it instead of reporting the model as broken.
+    """
+    quota = [
+        httpx.Response(429, json=QUOTA_BODY, headers={"Retry-After": "47"})
+        for _ in range(3)  # the first attempt plus max_retries
+    ]
+    recorder = Recorder(*quota)
+    with pytest.raises(QuotaExhausted) as caught:
+        build(recorder, max_retries=2, sleep=Clock())("PROMPT")
+
+    assert caught.value.retry_after == 47.0
+    assert "quota exhausted" in str(caught.value)
+    assert "limit: 500" in str(caught.value), "the provider's own diagnosis is quoted back"
+    assert isinstance(caught.value, ModelUnavailable), "callers catching the parent still work"
+    assert recorder.calls == 3, "one attempt plus max_retries"
+
+
+def test_a_non_429_terminal_error_is_not_reported_as_quota():
+    recorder = Recorder(httpx.Response(403, text="permission denied"))
+    with pytest.raises(ModelUnavailable) as caught:
+        build(recorder, max_retries=1, sleep=Clock())("PROMPT")
+    assert not isinstance(caught.value, QuotaExhausted)

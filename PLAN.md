@@ -1004,6 +1004,42 @@ not free.
   imports every module first in its own subprocess, because doing it in one process would
   hide the next such bug exactly as the suite hid this one.
 
+### A long batch is not one unit of work
+
+The first real Gemini run hit the free tier's daily cap and **lost everything it had
+bought**. `jg.db.connect()` commits on clean exit and rolls back on any exception — correct
+for an atomic unit of work — but `run_classify` wrote every treatment inside that one
+transaction and never committed mid-loop. When the terminal 429 propagated out of the
+`with` block, the rollback took not only the model-classified edges but the structural and
+triage rows written earlier in the same run. Confirmed after the fact: `llm_cache` was
+empty, so not one paid answer survived. On a 500-request daily cap that is a whole day of
+quota spent for nothing, and re-running would have repeated it forever — the batch could
+never outlive a single quota window, so it could never finish at all.
+
+Three changes, and the first is the one that matters:
+
+- **Both batch loops commit per item.** `run_classify` and `run_materiality` each commit
+  after every edge or pair. A batch of independent model calls is not one unit of work; each
+  item is. This is what makes "run it again tomorrow" actually converge, and it is what lets
+  the runner honestly claim the work is saved. Both stages already re-query only unfinished
+  work (`load_edges` skips edges that have a treatment, `pending_rewordings` skips judged
+  pairs), so durability was the only missing half of resumability.
+- **`QuotaExhausted` is its own error.** A 429 that outlives every retry is not a model
+  failure, it is the end of the budget, and the operator's next action is different: change
+  nothing, wait for the window, run the same command. It subclasses `ModelUnavailable`, so
+  callers that catch the parent are unaffected, and it carries the provider's own
+  `retry_after` hint.
+- **The runner stops cleanly instead of raising.** A traceback out of `make classify` told
+  the operator nothing about how far the run got or whether anything survived. It now reports,
+  in Czech: how many edges were classified, how many remain, the provider's suggested wait,
+  and that re-running resumes.
+
+Measured limit, which is lower than the public write-ups suggest: the API reported
+`limit: 500` per day for `gemini-3.5-flash-lite`, not the 1,000–1,500 those sources quote.
+At 500/day the 1,583-edge queue is roughly four sessions. The per-minute pacing does not
+help with a daily cap — nothing does except coming back — which is precisely why the work
+has to be durable.
+
 ### Build and environment
 
 - **Postgres is on host port 55432**, not 5432, to stay clear of a system Postgres. Both

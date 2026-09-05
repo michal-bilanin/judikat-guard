@@ -22,7 +22,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Any
 
-__all__ = ["ModelCall", "ModelUnavailable"]
+__all__ = ["ModelCall", "ModelUnavailable", "QuotaExhausted"]
 
 #: One prompt string in, one parsed JSON object out. The smallest seam a test can stub, and
 #: the reason swapping providers is a new function rather than a new pipeline: everything
@@ -39,3 +39,22 @@ class ModelUnavailable(RuntimeError):
     which is a reply that arrived and failed the evidence-span gate — that is retried once
     and then recorded as ``UNCLASSIFIED`` (CLAUDE.md rule 3), never surfaced as this.
     """
+
+
+class QuotaExhausted(ModelUnavailable):
+    """The provider's quota is spent. Not an error in the run — the end of today's budget.
+
+    Separated from its parent because the operator's next action is different and specific:
+    wait for the window to reset and run the same command again. Nothing is wrong with the
+    corpus, the prompt or the code, so the batch runner reports how far it got and stops
+    cleanly rather than raising — but only a *durable* run can honestly say that, which is
+    why the batch loops commit per item.
+
+    ``retry_after`` is the provider's own hint in seconds when it gave one. Google states it
+    both in the ``Retry-After`` header and in the error body as ``Please retry in 46.8s``;
+    on a daily cap that figure is the wait until the next window, which can be hours.
+    """
+
+    def __init__(self, message: str, *, retry_after: float | None = None) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
