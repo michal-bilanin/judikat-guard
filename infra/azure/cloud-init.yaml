@@ -98,7 +98,15 @@ write_files:
       [Install]
       WantedBy=multi-user.target
 
-  - path: /etc/caddy/Caddyfile
+  # Staged at .jg, NOT written straight to /etc/caddy/Caddyfile.
+  #
+  # write_files runs before runcmd, so writing the real path would put an unowned file where
+  # the caddy package expects to install its own conffile. dpkg then prompts — "Configuration
+  # file '/etc/caddy/Caddyfile' ... (Y/I/N/O/D/Z)" — finds no stdin, and ABORTS the configure
+  # step. The binary unpacks, `postinst` never runs, the `caddy` system user is never created,
+  # and the service dies with status=217/USER while `caddy validate` cheerfully reports the
+  # config is valid. Observed on the first real deployment; the package sat in state `iU`.
+  - path: /etc/caddy/Caddyfile.jg
     permissions: "0644"
     content: |
       # Automatic HTTPS. cloudapp.azure.com is a real, resolvable name and is on the Public
@@ -137,7 +145,13 @@ runcmd:
   - curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
   - curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
   - apt-get update
-  - apt-get install -y caddy
+  # noninteractive and --force-confold belt-and-braces: nothing in an unattended first boot
+  # can answer a dpkg conffile prompt, and a prompt that cannot be answered is a failed
+  # package, not a delayed one.
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::=--force-confold caddy
+  # Now that the package owns its conffile and postinst has created the caddy user, put our
+  # configuration in place.
+  - install -o root -g root -m 0644 /etc/caddy/Caddyfile.jg /etc/caddy/Caddyfile
 
   - mkdir -p ${app_dir}/extract ${app_dir}/prompts ${app_dir}/web
   - install -o judikat -g judikat -m 0640 /dev/null ${app_dir}/env

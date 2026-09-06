@@ -68,6 +68,11 @@ resource "azurerm_resource_group" "jg" {
 locals {
   suffix = random_string.suffix.result
 
+  # `curl -4 -s https://ifconfig.me` prints a bare address, so that is what people paste.
+  # Normalise here rather than making the reader convert it, and use this everywhere instead
+  # of var.ssh_source_cidr.
+  ssh_cidr = strcontains(var.ssh_source_cidr, "/") ? var.ssh_source_cidr : "${var.ssh_source_cidr}/32"
+
   tags = {
     project    = "judikat-guard"
     managed_by = "terraform"

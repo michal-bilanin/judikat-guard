@@ -50,32 +50,57 @@ on Migration and Asylum. The decision now interprets text that no longer exists.
 decision. It took 19 model calls to settle 938 affected decisions, because the materiality
 judgement is cached on the *version pair* rather than on the decision.
 
-## `03-tvrzeni-nad-ramec.txt` — the proposition check (M7)
+## `03-tvrzeni-v-rozporu.txt` and `04-tvrzeni-nad-ramec.txt` — the proposition check (M7)
 
 A different question from the other two. The traffic lights ask whether a source still
-stands; this asks whether **your document is using it honestly**.
+stands; this asks whether **your document is using it honestly**. Expand a source, click
+**Ověřit tvrzení, pro které tento zdroj uvádíte**, and paste the claim.
 
-The document cites a real decision — `č. j. 3 As 131/2021-86` — for a claim that reaches
-further than the decision goes: *"postačí pouhé prohlášení zástupce, a to v jakémkoli řízení
-před správními orgány i soudy"*. The citation is genuine and the reasoning is genuine; the
-sentence around it is not.
+Both verdicts below were produced by the deployed API against a real model on 2026-09-06, not
+predicted. Both cite `č. j. 3 As 131/2021-86`, which holds that authorisation to represent is
+proven by a written power of attorney and that a *prosté sdělení* will not do.
 
-To show it: check the document, expand the source, click **Ověřit tvrzení, pro které tento
-zdroj uvádíte**, and paste the claim from the first paragraph. Expect
-**tvrzení jde nad rámec zdroje** (`OVERBROAD`) with a verbatim quote naming the limit the
-court actually imposed.
+### `03` — the claim contradicts the source
 
-This one needs a model call, so it needs a key:
+> Podle ustálené judikatury postačí k prokázání zastoupení pouhé prohlášení zástupce…
+
+→ **zdroj tvrdí opak** (`CONTRADICTS`, confidence 1.0), quoting paragraph 28 verbatim:
+*"Podle § 33 odst. 1 věty druhé správního řádu se totiž zmocnění k zastoupení prokazuje
+písemnou plnou mocí."*
+
+The decision holds the opposite of the claim, so there is no narrower true version of it —
+`OVERBROAD` would be the wrong answer here.
+
+### `04` — the claim goes beyond the source
+
+> …a to shodně v řízení správním i v řízení před **správními soudy**.
+
+→ **tvrzení jde nad rámec zdroje** (`OVERBROAD`, confidence 0.85):
+*"Rozhodnutí sice výslovně potvrzuje tento závěr pro správní řízení, ale nezabývá se řízením
+před správními soudy."*
+
+This is the case PLAN.md section 12 calls the common and useful one, and the better demo of
+the two: the citation is real, the reasoning is real, and only the reach is wrong. The
+decision rests on § 33 odst. 1 **správního řádu** and closes by saying the requirement is
+justified *pro potřeby správního řízení*; carrying it across to the administrative courts
+drops that limit, and the model names exactly which limit was dropped.
+
+### Two independent findings on one citation
+
+Both documents cite a source that is *also* **RED** for an unrelated reason — it was
+superseded by an extended panel. The page answers the two questions separately, which is the
+point: "this source no longer stands" and "you are misreading this source" are different
+failures.
+
+Needs a model call, so it needs a key:
 
 ```
 export GEMINI_API_KEY=...
 make api
 ```
 
-Without the key the panel says the model is unavailable and returns **no verdict** — the
-error is deliberately not a result. Note also that the source itself is RED here for an
-unrelated reason (it was superseded), which is the point: the two questions are independent
-and the page answers them separately.
+Without one the panel reports the model unavailable and returns **no verdict** — the error is
+deliberately not a result.
 
 ## Running it
 

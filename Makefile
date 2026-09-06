@@ -40,7 +40,7 @@ COURT ?= NSS
 .PHONY: help toolchain up down psql migrate migrate-repair migrate-info clean-db api web web-install \
         venv crawl crawl-window load-us extract classify eval eval-extract test test-java \
         test-python fmt tf-init tf-plan tf-apply tf-output tf-destroy deploy deploy-env \
-        seed-remote deploy-logs deploy-smoke protect unprotect
+        seed-remote deploy-logs deploy-smoke protect unprotect tf-region-check tf-region-scan
 
 help: ## List targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -155,6 +155,42 @@ TF_OUT   = $(TF) output -raw
 REMOTE   = azureuser@$$($(TF_OUT) fqdn)
 APP_JAR := api/target/judikat-guard-api-0.1.0-SNAPSHOT.jar
 APP_DIR := /opt/judikat-guard
+
+# Region eligibility is a property of your subscription, not of the config, and Azure only
+# reports it when a resource is refused — per-resource, midway through an apply. Ask first.
+#
+# Only type=='Location' restrictions matter. A type=='Zone' restriction means some
+# availability zones are closed, which is irrelevant to a VM that asks for no zone, and
+# treating it as a blocker rejects perfectly usable regions.
+SIZE ?= Standard_B2ats_v2
+
+# Two independent checks, because they catch different failures and neither implies the other.
+# Measured: westeurope reports Standard_B2ats_v2 as perfectly available AND refuses every
+# resource with RequestDisallowedByAzure. Only the second check would have caught that.
+tf-region-check: ## Check a region+size this subscription may use, e.g. make tf-region-check LOC=polandcentral
+	@test -n "$(LOC)" || { echo "usage: make tf-region-check LOC=polandcentral [SIZE=Standard_B2ats_v2]"; exit 2; }
+	@echo -n "  size $(SIZE) in $(LOC): "
+	@out=$$(az vm list-skus --location "$(LOC)" --size "$(SIZE)" --all \
+	  --query "[?name=='$(SIZE)'].restrictions[?type=='Location'].reasonCode[]" -o tsv 2>&1) || { \
+	  echo "could not query — is the az CLI logged in?"; echo "$$out"; exit 1; }; \
+	if [ -z "$$out" ]; then echo "available"; \
+	else echo "RESTRICTED ($$out) — try another size"; exit 1; fi
+	@echo -n "  region $(LOC) accepting new resources: "
+	@rg=jg-region-probe-$$$$; \
+	az group create -n $$rg -l "$(LOC)" -o none 2>/dev/null; \
+	if az network vnet create -g $$rg -n probe -l "$(LOC)" \
+	     --address-prefix 10.99.0.0/24 -o none 2>/dev/null; then \
+	  echo "yes"; rc=0; \
+	else \
+	  echo "NO — not accepting new customers (https://aka.ms/locationineligible)"; rc=1; \
+	fi; \
+	az group delete -n $$rg --yes --no-wait 2>/dev/null; \
+	exit $$rc
+
+tf-region-scan: ## List every region where SIZE is unrestricted for this subscription (slow)
+	@az vm list-skus --size "$(SIZE)" --all \
+	  --query "[?name=='$(SIZE)' && !(restrictions[?type=='Location'])].locations[0]" -o tsv \
+	  | sort -u | tr '\n' ' '; echo
 
 tf-init: ## terraform init for the Azure stack
 	$(TF) init

@@ -32,7 +32,9 @@ one does not.
 ```bash
 cp infra/azure/terraform.tfvars.example infra/azure/terraform.tfvars
 $EDITOR infra/azure/terraform.tfvars      # subscription id, SSH key, your IP, email
+                                          # your IP: curl -4 -s https://ifconfig.me
 
+make tf-region-check LOC=germanywestcentral   # do this FIRST — see below
 make tf-init
 make tf-apply                             # ~10 min, most of it the database
 
@@ -49,7 +51,41 @@ Flyway runs on application startup, so the schema builds itself on first boot �
 separate migration step against the cloud database. `make seed-remote` therefore carries data
 only.
 
-## Two things that would otherwise break it silently
+## Pick a region and a VM size before you apply
+
+Two separate things can refuse you, and neither implies the other. Measured on the
+subscription this was written for:
+
+| | `westeurope` | `polandcentral` |
+|---|---|---|
+| `Standard_B2ats_v2` available | yes | yes |
+| Region accepting new resources | **no** | yes |
+| `Standard_B1s` available | **no** | **no** |
+
+So `make tf-region-check` runs two checks: a SKU query, and an actual create-and-delete of a
+free VNet in the target region. Only the second catches `RequestDisallowedByAzure: The
+selected region is currently not accepting new customers`, which is the failure that bites,
+and it bites per resource midway through an apply rather than at plan time.
+
+```bash
+make tf-region-check LOC=polandcentral        # the default
+make tf-region-check LOC=swedencentral
+make tf-region-scan                           # every region where the size is unrestricted (slow)
+```
+
+**Not `Standard_B1s`**, despite the free-tier documentation leading with it. On a real
+subscription it carried a Location-scoped `NotAvailableForSubscription` in every European
+region — it is the older B-series generation. `Standard_B2ats_v2` (2 vCPU, 1 GiB) is equally
+inside the 750 free hours and is actually obtainable, so it is the default here.
+
+`polandcentral` is the default region: the closest to Czechia of the two that passed both
+checks. Yours may differ — eligibility is a property of your subscription.
+
+**Choose once.** Changing `location` after a successful apply replaces the resource group and
+everything inside it, database included — an Azure resource group's region is fixed at
+creation.
+
+## Three things that would otherwise break it silently
 
 **The fat jar does not contain `extract/patterns.toml` or `prompts/`.** `PatternSet` and
 `PromptTemplate` read them from disk, walking up from the working directory, precisely so a
@@ -63,6 +99,25 @@ so the upward walk finds them.
 subscription the first apply fails with `MissingSubscriptionRegistration` unless the
 providers are listed explicitly, which `main.tf` does. Any older example you copy will not
 even `terraform init`.
+
+**cloud-init must not write `/etc/caddy/Caddyfile` directly.** `write_files` runs before
+`runcmd`, so the real path would hold an unowned file when the caddy package installs. dpkg
+prompts for the conffile, finds no stdin on an unattended boot, and aborts configure — the
+package lands in state `iU`, `postinst` never runs, the `caddy` user is never created, and
+the service dies with `status=217/USER`. The apply succeeds, the API comes up on :8080, and
+443 answers nothing, while `caddy validate` says the config is fine. Hit on the first real
+deployment. The file is therefore staged at `/etc/caddy/Caddyfile.jg` and copied into place
+after the package is configured.
+
+If you meet this on an existing box, repair it without rebuilding:
+
+```bash
+sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.jg
+sudo rm -f /etc/caddy/Caddyfile
+sudo DEBIAN_FRONTEND=noninteractive dpkg --configure -a
+sudo cp /etc/caddy/Caddyfile.jg /etc/caddy/Caddyfile
+sudo systemctl restart caddy
+```
 
 ## Exposure — read this before sharing the URL
 

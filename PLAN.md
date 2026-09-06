@@ -1180,6 +1180,15 @@ and then failed:
   none for the quoted one. On a 1 GiB box the heap limits are the difference between running
   and being OOM-killed, and nothing about their absence would have been visible.
 
+A fourth surfaced only on the first real deployment, and is the reason `write_files` stages
+the Caddyfile at `/etc/caddy/Caddyfile.jg` rather than writing it directly: cloud-init's
+`write_files` runs before `runcmd`, so the real path held an unowned file when the caddy
+package was installed. dpkg prompted for the conffile, found no stdin, and aborted the
+configure step — leaving the package in state `iU`, `postinst` never run, the `caddy` system
+user never created, and the service dead with `status=217/USER` while `caddy validate`
+reported the configuration valid. The apply succeeded, the API came up, and port 443 answered
+nothing.
+
 The provider is pinned to `azurerm ~> 5.4`. Its 5.0 release changed
 `resource_provider_registrations` to default to `none` and removed `skip_provider_registration`
 entirely, so the providers are listed explicitly; without that the first apply on a fresh
@@ -1207,7 +1216,7 @@ Numbers below were produced by running the pipeline, not by estimating it.
 | **M4** | **done** | Pasting a document citing `č. j. 5 Azs 120/2023-24` and `sp. zn. 9 Ao 37/2021` resolves both to real ECLIs and returns lights plus the scoped Czech verdict. |
 | **M5** | **done** | 1,583 edges labelled by the reasoning tier, on Gemini. **`UNCLASSIFIED` 2.5%**, inside the milestone's 5% bar. The label spread is plausible, which is itself the signal: 764 `MENTIONED` / 564 `FOLLOWED` against a thin tail of 88 `DISTINGUISHED`, 68 `CRITICIZED`, 44 `NARROWED`, 13 `DEPARTED`, 2 `QUASHED`. A model returning two hundred `DEPARTED` would be the alarming outcome. |
 | **M6** | **done** | Real statutory data for 89/2012, 325/1999 and 150/2002: 249 `provision_version` rows, windows non-overlapping. Section 10's scenario is reproduced on real law at corpus scale, and **19 materiality calls settled it** — all 19 judged **material**, confidence 0.95–1.00, putting **938 decisions** on a provision that has since been rewritten under them. That is the 38:1 payoff of keying materiality on the version pair rather than the decision, measured. Biggest exposures: `150/2002 § 60 odst. 3`, `§ 46 odst. 1`, `325/1999 § 12`. |
-| **M7** | **wired end to end, not yet run against a real model** | `POST /api/decisions/{ecli}/proposition-check` and the claim box in the evidence panel, added 2026-09-06. 30 tests, all against stubs. The done-when — "an overbroad citation is flagged in the demo document" — needs one run with `GEMINI_API_KEY` set; `demo/03-tvrzeni-nad-ramec.txt` is the document for it. |
+| **M7** | **done** | Wired end to end 2026-09-06 and run against a real model on the deployed instance the same day: `04-tvrzeni-nad-ramec.txt` returns OVERBROAD (0.85) with the note "Rozhodnutí sice výslovně potvrzuje tento závěr pro správní řízení, ale nezabývá se řízením před správními soudy." That is the done-when — an overbroad citation flagged in the demo document. 30 tests, plus two live verdicts. |
 | **M8** | **blocked on human work** | `eval/labels.csv` has 0 gold rows. Section 15 requires them hand-labelled with the decision text open; fabricating them would violate rule 1 and make every number meaningless. |
 
 **What is and is not reachable without a model, stated plainly.**

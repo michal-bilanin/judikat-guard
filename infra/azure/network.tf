@@ -53,7 +53,7 @@ resource "azurerm_network_security_group" "jg" {
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "22"
-    source_address_prefix      = var.ssh_source_cidr
+    source_address_prefix      = local.ssh_cidr
     destination_address_prefix = "*"
   }
 

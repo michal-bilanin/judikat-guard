@@ -73,6 +73,6 @@ resource "azurerm_postgresql_flexible_server_firewall_rule" "vm" {
 resource "azurerm_postgresql_flexible_server_firewall_rule" "operator" {
   name             = "allow-operator"
   server_id        = azurerm_postgresql_flexible_server.jg.id
-  start_ip_address = cidrhost(var.ssh_source_cidr, 0)
-  end_ip_address   = cidrhost(var.ssh_source_cidr, -1)
+  start_ip_address = cidrhost(local.ssh_cidr, 0)
+  end_ip_address   = cidrhost(local.ssh_cidr, -1)
 }

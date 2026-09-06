@@ -18,11 +18,29 @@ variable "resource_group_name" {
 variable "location" {
   type        = string
   description = <<-EOT
-    Azure region. Pick one near you and near the courts' users; westeurope is the obvious
-    choice from Czechia. Note that azurerm 5.0 disabled location validation at plan time, so
-    a typo here surfaces only when Azure rejects the apply.
+    Azure region.
+
+    NOT westeurope, and probably not germanywestcentral either. Azure closes regions to new
+    subscriptions, and an apply into a closed one fails with "RequestDisallowedByAzure: The
+    selected region is currently not accepting new customers"
+    (https://aka.ms/locationineligible) — per resource, midway through, never at plan time.
+
+    Eligibility is a property of YOUR subscription, not of this configuration. Measured on
+    the subscription this was written for, the only European regions offering an unrestricted
+    free-tier VM size were polandcentral and swedencentral; westeurope and germanywestcentral
+    both carried a Location-type restriction. Yours may differ.
+
+    Check before applying:  make tf-region-check LOC=polandcentral
+
+    polandcentral is the default because it is the closest of the two to Czechia.
+
+    Changing this after a successful apply REPLACES the resource group and everything in it,
+    the database included. Choose once.
+
+    Note also that azurerm 5.0 disabled location validation at plan time, so a typo here
+    surfaces only when Azure rejects the apply.
   EOT
-  default     = "westeurope"
+  default     = "polandcentral"
 }
 
 variable "dns_label" {
@@ -47,34 +65,53 @@ variable "ssh_public_key" {
 variable "ssh_source_cidr" {
   type        = string
   description = <<-EOT
-    Who may reach port 22. Deliberately has no default: 0.0.0.0/0 would put an SSH port on
-    the public internet for a demo box, and defaults are what people forget to change.
+    Who may reach port 22, and who may reach the database. Deliberately has no default:
+    0.0.0.0/0 would put an SSH port on the public internet for a demo box, and defaults are
+    what people forget to change.
 
-    Your current address: curl -s https://ifconfig.me
-    Then set it as a /32, e.g. "203.0.113.7/32".
+    Get it with:  curl -4 -s https://ifconfig.me
 
-    A home IP usually changes. If SSH stops working, re-run apply with the new value — the
-    NSG rule updates in place and does not touch the VM.
+    Paste the result as-is. A bare address is normalised to /32; an explicit CIDR is taken as
+    given, so "203.0.113.7" and "203.0.113.7/32" both work, and "203.0.113.0/24" widens it to
+    an office range.
+
+    IPv4 only. The -4 matters: on a dual-stack connection curl may hand back an IPv6 address,
+    and Azure's PostgreSQL firewall rules take IPv4 addresses only — so an IPv6 value would
+    pass here and then fail mid-apply, after the VM already exists.
+
+    A home address usually changes. If SSH or `make seed-remote` stops working, re-run apply
+    with the new value: both rules update in place and neither touches the VM.
   EOT
 
   validation {
-    condition     = can(cidrhost(var.ssh_source_cidr, 0))
-    error_message = "ssh_source_cidr must be a CIDR block, e.g. 203.0.113.7/32."
+    # Not `can(cidrhost(...))`: that accepts IPv6 too, and the failure would land at apply
+    # time on the Postgres firewall rule rather than here. Bare addresses are accepted
+    # because that is exactly what the documented curl command prints.
+    condition     = can(regex("^([0-9]{1,3}\\.){3}[0-9]{1,3}(/(3[0-2]|[12]?[0-9]))?$", var.ssh_source_cidr))
+    error_message = <<-EOT
+      ssh_source_cidr must be an IPv4 address or IPv4 CIDR — "203.0.113.7" or "203.0.113.7/32".
+      Get yours with: curl -4 -s https://ifconfig.me
+      (IPv6 is not supported: Azure's PostgreSQL firewall rules are IPv4-only.)
+    EOT
   }
 }
 
 variable "vm_size" {
   type        = string
   description = <<-EOT
-    Standard_B1s (1 vCPU, 1 GiB) is in the free account's 750 hours/month, which covers one
-    VM running continuously. The API measured 180 MB RSS at -Xmx384m, so it fits — with a
-    swapfile configured in cloud-init for headroom during startup and Flyway.
+    Standard_B2ats_v2 (2 vCPU, 1 GiB) — in the free account's 750 hours/month, which covers
+    one VM running continuously. The API measured 180 MB RSS at -Xmx384m, so it fits, with a
+    swapfile from cloud-init for headroom during startup and Flyway.
 
-    Standard_B2ats_v2 and Standard_B2pts_v2 are also in the free allowance and are markedly
-    roomier (2 vCPU, 1 GiB). Worth switching to if the box feels tight; the B-series v1 sizes
-    are the older generation.
+    Not Standard_B1s, despite that being the size the free-tier documentation leads with.
+    Measured on a real subscription, B1s carried a Location-type "NotAvailableForSubscription"
+    restriction in every European region — it is the older B-series generation and Azure is
+    steering new subscriptions off it. B2ats_v2 and B2pts_v2 are equally free and actually
+    available.
+
+    Whatever you set here, check it: make tf-region-check LOC=<region> SIZE=<size>
   EOT
-  default     = "Standard_B1s"
+  default     = "Standard_B2ats_v2"
 }
 
 variable "postgres_storage_mb" {
