@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720" font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8a857c"/>
+    </marker>
+    <marker id="aw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#1f3a5f"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="#faf8f5"/>
+
+  <text x="60" y="62" font-size="34" font-weight="700" fill="#211f1c">Judikát Guard</text>
+  <text x="60" y="92" font-size="17" fill="#55534e">Model označuje vzťahy. Verdikty prideľuje deterministický engine. Každý verdikt vedie k odstavcu.</text>
+
+  <!-- ============ 1. ZDROJE ============ -->
+  <text x="60" y="146" font-size="13" font-weight="700" fill="#8a857c" letter-spacing="1.2">1 · ZDROJE</text>
+  <rect x="60" y="158" width="212" height="132" rx="10" fill="#fff" stroke="#ddd9d2"/>
+  <text x="76" y="184" font-size="15" font-weight="600" fill="#211f1c">Súdy a zbierka</text>
+  <text x="76" y="209" font-size="13.5" fill="#55534e">nssoud.cz · 18 458</text>
+  <text x="76" y="231" font-size="13.5" fill="#55534e">nalus.usoud.cz · 2 754</text>
+  <text x="76" y="253" font-size="13.5" fill="#55534e">e-sbirka.gov.cz</text>
+  <text x="76" y="277" font-size="12" fill="#8a857c">1 req/s · robots.txt · cache</text>
+
+  <!-- ============ 2. PIPELINE ============ -->
+  <text x="316" y="146" font-size="13" font-weight="700" fill="#8a857c" letter-spacing="1.2">2 · PIPELINE (Python)</text>
+  <rect x="316" y="158" width="232" height="132" rx="10" fill="#fff" stroke="#ddd9d2"/>
+  <text x="332" y="184" font-size="15" font-weight="600" fill="#211f1c">Extrakcia citácií</text>
+  <text x="332" y="208" font-size="13.5" fill="#55534e">regex · 109 244 citácií</text>
+  <rect x="332" y="220" width="200" height="26" rx="5" fill="#f2efe9" stroke="#e3ded5"/>
+  <text x="342" y="238" font-size="12" fill="#55534e" font-family="ui-monospace, Consolas, monospace">extract/patterns.toml</text>
+  <text x="332" y="266" font-size="12" fill="#8a857c">jediný súbor pre Python aj Javu —</text>
+  <text x="332" y="282" font-size="12" fill="#8a857c">obe strany hľadajú to isté</text>
+
+  <!-- ============ 3. KLASIFIKACIA ============ -->
+  <text x="592" y="146" font-size="13" font-weight="700" fill="#8a857c" letter-spacing="1.2">3 · KLASIFIKÁCIA VZŤAHU</text>
+  <rect x="592" y="158" width="286" height="132" rx="10" fill="#fff" stroke="#ddd9d2"/>
+  <text x="608" y="182" font-size="13.5" fill="#211f1c"><tspan font-weight="600">1.</tspan> štrukturálne — bez modelu</text>
+  <text x="608" y="206" font-size="13.5" fill="#211f1c"><tspan font-weight="600">2.</tspan> vynútená eskalácia → model</text>
+  <text x="608" y="230" font-size="13.5" fill="#211f1c"><tspan font-weight="600">3.</tspan> triáž → model, ak treba</text>
+  <line x1="608" y1="244" x2="862" y2="244" stroke="#eee9e1"/>
+  <text x="608" y="264" font-size="12" fill="#8a857c">6 746 vzťahov · 1 899 volaní v cache</text>
+  <text x="608" y="280" font-size="12" fill="#8a857c">temperature 0 · verzované prompty</text>
+
+  <!-- ============ BRANA ============ -->
+  <rect x="922" y="158" width="298" height="132" rx="10" fill="#fdf6ec" stroke="#d9b978" stroke-width="1.5"/>
+  <text x="938" y="184" font-size="15" font-weight="700" fill="#8a6d1f">Brána doslovného citátu</text>
+  <text x="938" y="210" font-size="13" fill="#6b5a2a">Odpoveď modelu musí obsahovať</text>
+  <text x="938" y="228" font-size="13" fill="#6b5a2a">úryvok, ktorý je doslovne v texte,</text>
+  <text x="938" y="246" font-size="13" fill="#6b5a2a">ktorý model dostal.</text>
+  <text x="938" y="272" font-size="13" font-weight="600" fill="#8a6d1f">Ak nie je → jeden pokus → UNCLASSIFIED.</text>
+  <text x="938" y="288" font-size="12" fill="#8a6d1f">Neuloží sa. Nikdy sa nezobrazí ako odpoveď.</text>
+
+  <!-- sipky rad 1 -->
+  <line x1="272" y1="224" x2="310" y2="224" stroke="#8a857c" stroke-width="1.6" marker-end="url(#a)"/>
+  <line x1="548" y1="224" x2="586" y2="224" stroke="#8a857c" stroke-width="1.6" marker-end="url(#a)"/>
+  <line x1="878" y1="224" x2="916" y2="224" stroke="#d9b978" stroke-width="2" marker-end="url(#a)"/>
+
+  <!-- ============ DATABAZA ============ -->
+  <rect x="60" y="336" width="1160" height="72" rx="10" fill="#fff" stroke="#ddd9d2"/>
+  <text x="80" y="364" font-size="15" font-weight="600" fill="#211f1c">PostgreSQL — dôkazy, nie verdikty</text>
+  <text x="80" y="388" font-size="13" fill="#55534e">decision · citation · treatment (label + doslovný citát + odstavec) · provision_version · departure_authority</text>
+  <text x="1200" y="388" font-size="12" fill="#8a857c" text-anchor="end">Flyway vlastní schému</text>
+
+  <line x1="640" y1="296" x2="640" y2="330" stroke="#8a857c" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <!-- ============ HRANICA ============ -->
+  <line x1="60" y1="440" x2="1220" y2="440" stroke="#1f3a5f" stroke-width="1.5" stroke-dasharray="7 5"/>
+  <rect x="452" y="426" width="376" height="28" rx="14" fill="#faf8f5"/>
+  <text x="640" y="445" font-size="13.5" font-weight="700" fill="#1f3a5f" text-anchor="middle">nad čiarou dôkazy · pod čiarou verdikty</text>
+
+  <!-- ============ ENGINE ============ -->
+  <text x="60" y="496" font-size="13" font-weight="700" fill="#8a857c" letter-spacing="1.2">4 · API (Java 25 · Spring Boot 4)</text>
+  <rect x="60" y="508" width="380" height="150" rx="10" fill="#fff" stroke="#1f3a5f" stroke-width="1.8"/>
+  <text x="80" y="536" font-size="16" font-weight="700" fill="#1f3a5f">StatusEngine</text>
+  <text x="80" y="560" font-size="13.5" fill="#55534e">Čistá funkcia. Žiadne SQL, žiadne hodiny,</text>
+  <text x="80" y="578" font-size="13.5" fill="#55534e">žiadne volanie modelu.</text>
+  <text x="80" y="604" font-size="13.5" fill="#55534e">dôkazy + dátum → svetlo + dôvody</text>
+  <text x="80" y="632" font-size="12" fill="#8a857c">Pravdivostná tabuľka, 53 testov.</text>
+  <text x="80" y="648" font-size="12" fill="#8a857c">Zmena politiky nevyžaduje nové volanie modelu.</text>
+
+  <!-- svetla -->
+  <rect x="470" y="508" width="330" height="150" rx="10" fill="#fff" stroke="#ddd9d2"/>
+  <circle cx="492" cy="538" r="8" fill="#a12b1b"/>
+  <text x="510" y="543" font-size="14.5" font-weight="600" fill="#211f1c">překonáno · zrušeno</text>
+  <circle cx="492" cy="576" r="8" fill="#b8860b"/>
+  <text x="510" y="581" font-size="14.5" font-weight="600" fill="#211f1c">argumentačně oslabeno · zúženo</text>
+  <circle cx="492" cy="614" r="8" fill="#2f7a44"/>
+  <text x="510" y="619" font-size="14.5" fill="#211f1c">nenalezeno nepříznivé nakládání</text>
+  <text x="492" y="644" font-size="12" fill="#8a857c">nikdy nie „platný“ — vždy voči korpusu a dátumu</text>
+
+  <!-- web -->
+  <text x="830" y="496" font-size="13" font-weight="700" fill="#8a857c" letter-spacing="1.2">5 · STRÁNKA</text>
+  <rect x="830" y="508" width="390" height="150" rx="10" fill="#fff" stroke="#ddd9d2"/>
+  <text x="850" y="536" font-size="15" font-weight="600" fill="#211f1c">Panel dôkazov</text>
+  <text x="850" y="560" font-size="13.5" fill="#55534e">doslovný citát · odstavec · rozhodovacie</text>
+  <text x="850" y="578" font-size="13.5" fill="#55534e">teleso · odkaz na stránku súdu</text>
+  <line x1="850" y1="592" x2="1200" y2="592" stroke="#eee9e1"/>
+  <text x="850" y="614" font-size="14" font-weight="600" fill="#1f3a5f">Kontrola tvrdenia</text>
+  <text x="850" y="634" font-size="13" fill="#55534e">nie „platí zdroj“, ale „používate ho správne“</text>
+  <text x="850" y="652" font-size="12" fill="#8a857c">SUPPORTS · OVERBROAD · UNRELATED · CONTRADICTS</text>
+
+  <line x1="440" y1="583" x2="464" y2="583" stroke="#1f3a5f" stroke-width="1.6" marker-end="url(#aw)"/>
+  <line x1="800" y1="583" x2="824" y2="583" stroke="#1f3a5f" stroke-width="1.6" marker-end="url(#aw)"/>
+  <line x1="380" y1="414" x2="380" y2="502" stroke="#1f3a5f" stroke-width="1.6" marker-end="url(#aw)"/>
+
+  <text x="60" y="700" font-size="12.5" fill="#8a857c">21 212 rozhodnutí (NSS do 30. 4. 2024, ÚS do 28. 5. 2025) · korpus má diery a stránka to hovorí</text>
+  <text x="1220" y="700" font-size="12.5" fill="#8a857c" text-anchor="end">Postgres + ručne písané SQL je celá dátová platforma</text>
+</svg>
