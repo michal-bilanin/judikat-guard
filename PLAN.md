@@ -1147,6 +1147,53 @@ what later case law did to the source; these describe the relation between the u
 sentence and that source. Blurring the two would let "your claim is too broad" read as "this
 decision was narrowed", which points at a different document entirely.
 
+### Deployment: Azure free account, Terraform in `infra/azure`
+
+Not in the plan at all — sections 4 and 14 stop at the local `make` targets. Added 2026-09-06
+so the demo can live at a URL.
+
+One `Standard_B1s` VM serving the built frontend through Caddy and reverse-proxying `/api` to
+the jar under systemd, plus a `B_Standard_B1ms` PostgreSQL Flexible Server with 32 GB. Both
+sit inside the free account's 12-month allowances; the static public IP does not, and is the
+one component that bills from day one at roughly $3–4/month.
+
+**No container image and no CI pipeline**, per the "Do not add" list. Terraform provisions,
+cloud-init builds the host, and `make deploy` ships a jar over SSH. This is not a workaround —
+a single JVM service on a single box genuinely needs neither.
+
+Three findings shaped the design, each of which would have produced a deployment that came up
+and then failed:
+
+- **The fat jar contains neither `extract/patterns.toml` nor `prompts/`.** `PatternSet` and
+  `PromptTemplate` locate them by walking up from the working directory, deliberately, so
+  that a copy baked into a build cannot drift from the file the pipeline reads. The payload
+  therefore ships all three and the systemd unit sets `WorkingDirectory` to the app
+  directory. Shipping only the jar gives a clean startup and a failure on the first request.
+
+- **Nothing would have created the `judikat` database.** Azure Flexible Server provisions only
+  `postgres`, `azure_maintenance` and `azure_sys`, and a custom-format `pg_dump` carries no
+  `CREATE DATABASE`. Hence the explicit `azurerm_postgresql_flexible_server_database`.
+
+- **`Environment=JAVA_OPTS=...` must be quoted as a whole.** Unquoted, systemd treats each
+  space-separated token as its own assignment, keeps the first and discards the rest —
+  verified with `systemd-analyze verify`, which reports five errors for the unquoted form and
+  none for the quoted one. On a 1 GiB box the heap limits are the difference between running
+  and being OOM-killed, and nothing about their absence would have been visible.
+
+The provider is pinned to `azurerm ~> 5.4`. Its 5.0 release changed
+`resource_provider_registrations` to default to `none` and removed `skip_provider_registration`
+entirely, so the providers are listed explicitly; without that the first apply on a fresh
+subscription fails with `MissingSubscriptionRegistration`.
+
+`budget.tf` is an alert, not a cap — Azure offers no hard spending limit on pay-as-you-go —
+and it cannot see the bill most likely to surprise anyone, because Gemini usage is Google's.
+The exposure that follows from putting an unauthenticated model-calling endpoint on the
+public internet is written up in `infra/azure/README.md` rather than here, because it is a
+decision for whoever shares the URL.
+
+`terraform validate` and `fmt` pass against 5.4.0. **No `terraform apply` has been run against
+a real subscription**, so first-apply failures would surface on first use.
+
 ### Milestone status, measured rather than asserted
 
 Numbers below were produced by running the pipeline, not by estimating it.

@@ -1,0 +1,157 @@
+#cloud-config
+# Turns a stock Ubuntu image into the Judikát Guard host. Runs once, on first boot.
+#
+# This file deliberately contains NO SECRETS. Azure stores custom_data and exposes it to
+# anything running on the VM through the instance metadata service, so the database password
+# and the Gemini key are written later by `make deploy` over SSH, into an EnvironmentFile
+# that only root and the service user can read.
+#
+# Changing this file forces the VM to be REPLACED (azurerm marks custom_data force-new).
+# That is survivable — the database is a separate resource and `make deploy` re-ships the
+# app — but it is not a hot edit.
+#
+# Debugging a first boot: /var/log/cloud-init-output.log has the console output,
+# /var/log/cloud-init.log the module-by-module detail, and `cloud-init status --long` says
+# whether it finished. Nothing below is reachable until it reports "done".
+
+package_update: true
+package_upgrade: false
+
+packages:
+  # openjdk-25-jre-headless lives in "universe" on 24.04 (it is in main from 26.04 onward).
+  # Azure's Ubuntu images enable universe by default, so no third-party JDK repository and no
+  # Adoptium key management is needed — the distribution ships the runtime this app needs.
+  - openjdk-25-jre-headless
+  - postgresql-client-16
+  - debian-keyring
+  - debian-archive-keyring
+  - apt-transport-https
+  - curl
+
+# 1 GiB of RAM running a JVM plus Caddy is tight, and Flyway on first boot is the peak. Swap
+# turns a hard OOM kill during startup into a slow startup. It lives on the OS disk rather
+# than the ephemeral resource disk so that it survives a deallocate/start cycle.
+swap:
+  filename: /swapfile
+  size: 2147483648
+  maxsize: 2147483648
+
+users:
+  - default
+  # The service account. No login shell, no home directory to leave secrets in: it exists
+  # only to own the process.
+  - name: judikat
+    system: true
+    shell: /usr/sbin/nologin
+    lock_passwd: true
+
+write_files:
+  # Owned by the admin user so `make deploy` can scp into it without sudo, group-readable by
+  # the service account that has to read the jar, the prompts and the patterns file.
+  - path: /etc/systemd/system/judikat-guard.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Judikat Guard API
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=judikat
+      Group=judikat
+
+      # Load-bearing. PatternSet and PromptTemplate locate extract/patterns.toml and
+      # prompts/ by walking UP from the working directory, and neither is packaged inside
+      # the fat jar. Running from ${app_dir}, with the payload laid out in repo shape, is
+      # what makes citation extraction and every model prompt resolve. Change this and the
+      # app starts and then fails on the first request.
+      WorkingDirectory=${app_dir}
+
+      # The database password and GEMINI_API_KEY. Written by `make deploy`, not by
+      # cloud-init. Absent on first boot, which is why the unit is not enabled until the
+      # first deploy has run.
+      EnvironmentFile=${app_dir}/env
+
+      # Every flag must sit inside ONE pair of quotes. Without them systemd treats each
+      # space-separated token as a separate assignment, keeps only the first, and silently
+      # discards the rest — the heap limits would simply not apply, on the one box where
+      # they matter.
+      Environment="JAVA_OPTS=-XX:+UseSerialGC -Xms192m -Xmx384m -XX:MaxMetaspaceSize=192m -XX:MaxDirectMemorySize=64m -XX:+ExitOnOutOfMemoryError"
+
+      # $JAVA_OPTS unbraced is deliberate: systemd word-splits $VAR and does not split
+      # $${VAR}, and these are separate arguments.
+      ExecStart=/usr/bin/java $JAVA_OPTS -jar ${app_dir}/app.jar
+
+      Restart=on-failure
+      RestartSec=5
+
+      NoNewPrivileges=true
+      PrivateTmp=true
+      ProtectSystem=strict
+      ProtectHome=true
+      ReadWritePaths=${app_dir}
+      ProtectKernelTunables=true
+      ProtectControlGroups=true
+      RestrictSUIDSGID=true
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /etc/caddy/Caddyfile
+    permissions: "0644"
+    content: |
+      # Automatic HTTPS. cloudapp.azure.com is a real, resolvable name and is on the Public
+      # Suffix List, so Let's Encrypt will issue for it and this label gets its own rate
+      # limit rather than sharing one with every other Azure VM.
+      ${fqdn} {
+              encode gzip zstd
+
+              # Optional gates (basic auth, IP allowlist) drop in here. `make protect`
+              # writes one; the no-op below guarantees the glob always matches, because an
+              # import matching nothing is a config error.
+              import /etc/caddy/conf.d/*.conf
+
+              # `handle`, not `handle_path`: Spring's controllers are mapped under /api, so
+              # the prefix must survive the proxy hop.
+              handle /api/* {
+                      reverse_proxy 127.0.0.1:8080
+              }
+
+              handle {
+                      root * ${app_dir}/web
+                      try_files {path} /index.html
+                      file_server
+              }
+      }
+
+  - path: /etc/caddy/conf.d/00-no-op.conf
+    permissions: "0644"
+    content: |
+      # Intentionally empty. Keeps `import /etc/caddy/conf.d/*.conf` matching at least one
+      # file so Caddy starts with no gate configured. See `make protect`.
+
+runcmd:
+  # Caddy's own apt repository. Ubuntu's packaged caddy is old enough to miss features and
+  # is not what Caddy's own docs point at.
+  - curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  - curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+  - apt-get update
+  - apt-get install -y caddy
+
+  - mkdir -p ${app_dir}/extract ${app_dir}/prompts ${app_dir}/web
+  - install -o judikat -g judikat -m 0640 /dev/null ${app_dir}/env
+  - chown -R azureuser:judikat ${app_dir}
+  # 0755, not 0750: Caddy runs as its own user and has to traverse this directory to serve
+  # web/. The secret is protected by the env file's own 0640, not by the directory.
+  - chmod 0755 ${app_dir}
+
+  - systemctl daemon-reload
+  - systemctl enable caddy
+  - systemctl restart caddy
+
+  # judikat-guard is intentionally NOT started here: there is no jar and no env file yet.
+  # `make deploy` ships both and starts it.
+  - systemctl enable judikat-guard
+
+final_message: "cloud-init finished after $UPTIME s. Run `make deploy` to ship the app."

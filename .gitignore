@@ -20,6 +20,16 @@ scripts/**/__pycache__/
 web/node_modules/
 web/dist/
 
+# Terraform. State holds the generated database password in cleartext, and tfvars holds the
+# subscription id and your SSH source address. Neither belongs in the repository.
+infra/**/.terraform/
+infra/**/*.tfstate
+infra/**/*.tfstate.*
+infra/**/*.tfvars
+!infra/**/*.tfvars.example
+infra/**/.terraform.tfstate.lock.info
+infra/**/tfplan
+
 # Editors / OS
 .idea/
 .vscode/

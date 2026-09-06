@@ -27,7 +27,15 @@ make extract
 make classify
 make eval
 make test          mvn test + pytest
+
+make tf-apply      provision the Azure stack (infra/azure)
+make deploy        build and ship jar + prompts + patterns + web to the VM
+make seed-remote   restore the local corpus into the cloud database
 ```
+
+Deployment lives in `infra/azure/` (Terraform + cloud-init). Read `infra/azure/README.md`
+before applying: the public IP is the one component that always bills, and the app reaches
+the public internet with no authentication and a model-calling endpoint behind it.
 
 Add a Makefile target for any command you run more than twice. Never document a bare command in a commit message when a target would do.
 
