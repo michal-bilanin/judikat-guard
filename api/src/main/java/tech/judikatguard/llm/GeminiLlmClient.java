@@ -33,33 +33,15 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * The Google Gemini Interactions API over a plain {@link RestClient}. The second provider
- * behind {@link LlmClient}, added because Google AI Studio offers a free API tier and this
- * project's owner has no Anthropic API credit; the Anthropic path is untouched and still
- * selectable.
+ * behind {@link LlmClient}, added because Google AI Studio offers a free API tier; the
+ * Anthropic path is untouched and still selectable.
  *
  * <p>One POST to {@code /v1beta/interactions}, one JSON body, one text reply. No SDK, for
  * the same reason {@link AnthropicLlmClient} has none (PLAN.md section 4).
  *
- * <p>Configuration, all optional, all resolvable from the environment through Spring's
- * relaxed binding:
- *
- * <table border="1">
- *   <caption>Properties</caption>
- *   <tr><th>Property</th><th>Environment</th><th>Default</th></tr>
- *   <tr><td>{@code gemini.api-key}</td><td>{@code GEMINI_API_KEY}</td>
- *       <td>none; see the precedence rules below</td></tr>
- *   <tr><td>{@code judikatguard.llm.provider}</td><td>{@code JUDIKATGUARD_LLM_PROVIDER}</td>
- *       <td>unset, also reachable as {@code jg.llm.provider}</td></tr>
- *   <tr><td>{@code judikatguard.llm.gemini.model}</td><td>{@code JUDIKATGUARD_LLM_GEMINI_MODEL}</td>
- *       <td>{@value #DEFAULT_MODEL}</td></tr>
- *   <tr><td>{@code judikatguard.llm.gemini.base-url}</td><td></td><td>{@value #DEFAULT_BASE_URL}</td></tr>
- *   <tr><td>{@code judikatguard.llm.gemini.thinking-level}</td><td></td><td>{@value #DEFAULT_THINKING_LEVEL}</td></tr>
- *   <tr><td>{@code judikatguard.llm.gemini.timeout-seconds}</td><td></td><td>{@value #DEFAULT_TIMEOUT_SECONDS}</td></tr>
- *   <tr><td>{@code judikatguard.llm.gemini.max-attempts}</td><td></td><td>{@value #DEFAULT_MAX_ATTEMPTS}</td></tr>
- *   <tr><td>{@code judikatguard.llm.gemini.retry-initial-millis}</td><td></td><td>{@value #DEFAULT_RETRY_INITIAL_MILLIS}</td></tr>
- *   <tr><td>{@code judikatguard.llm.gemini.response-schema}</td><td></td>
- *       <td>{@code proposition}; {@code none} sends the JSON mime type with no schema</td></tr>
- * </table>
+ * <p>Configuration is optional and resolves from the environment through Spring's relaxed
+ * binding. Property names and defaults are {@link Settings#fromEnvironment}, which is the
+ * only place they can be wrong.
  *
  * <p><b>Provider precedence.</b> Exactly one {@link LlmClient} must win, deterministically:
  *

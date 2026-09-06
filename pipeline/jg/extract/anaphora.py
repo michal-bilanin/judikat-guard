@@ -32,7 +32,7 @@ log = logging.getLogger(__name__)
 CONTEXT_PARAGRAPHS = 3
 
 #: prompt/response contract version for this pass. Assembled in code rather than in
-#: prompts/ because no versioned anaphora template exists yet; see the report.
+#: prompts/ because no versioned anaphora template exists yet.
 PROMPT_VERSION = "anaphora-select.v1"
 
 _SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")

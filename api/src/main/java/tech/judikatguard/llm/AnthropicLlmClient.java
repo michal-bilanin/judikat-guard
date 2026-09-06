@@ -28,23 +28,9 @@ import tools.jackson.databind.ObjectMapper;
  * of this project are the rules engine and the evidence discipline, and a hackathon does not
  * pay for a client library to reach one endpoint.
  *
- * <p>Configuration, all optional, all resolvable from the environment through Spring's
- * relaxed binding:
- *
- * <table border="1">
- *   <caption>Properties</caption>
- *   <tr><th>Property</th><th>Environment</th><th>Default</th></tr>
- *   <tr><td>{@code anthropic.api-key}</td><td>{@code ANTHROPIC_API_KEY}</td>
- *       <td>none; without it the application starts with {@link LlmClient.Unconfigured}</td></tr>
- *   <tr><td>{@code judikatguard.llm.model}</td><td>{@code JUDIKATGUARD_LLM_MODEL}</td>
- *       <td>{@value #DEFAULT_MODEL}, also reachable as {@code jg.llm.model} /
- *           {@code JG_LLM_MODEL} to match {@code pipeline/jg/config.py}</td></tr>
- *   <tr><td>{@code judikatguard.llm.base-url}</td><td>{@code JUDIKATGUARD_LLM_BASEURL}</td>
- *       <td>{@value #DEFAULT_BASE_URL}</td></tr>
- *   <tr><td>{@code judikatguard.llm.max-tokens}</td><td></td><td>{@value #DEFAULT_MAX_TOKENS}</td></tr>
- *   <tr><td>{@code judikatguard.llm.timeout-seconds}</td><td></td><td>{@value #DEFAULT_TIMEOUT_SECONDS}</td></tr>
- *   <tr><td>{@code judikatguard.llm.send-temperature}</td><td></td><td>{@code false}, see below</td></tr>
- * </table>
+ * <p>Configuration is optional and resolves from the environment through Spring's relaxed
+ * binding. Property names and defaults are {@link Settings#fromEnvironment}, which is the
+ * only place they can be wrong.
  *
  * <p><b>On temperature.</b> CLAUDE.md rule 7 asks for temperature 0, and the three prompt
  * files declare {@code temperature: 0}. The current models reject a non-default sampling
@@ -53,8 +39,7 @@ import tools.jackson.databind.ObjectMapper;
  * {@code judikatguard.llm.send-temperature=true} restores it for an older model that still
  * accepts it. What the rule is actually protecting — a cached reply being a faithful replay
  * rather than a fresh sample — is preserved by {@link LlmCacheRepository}, and temperature 0
- * never guaranteed identical outputs anyway. This is a documented deviation, not an
- * oversight; see the report accompanying this change.
+ * never guaranteed identical outputs anyway. A documented deviation, not an oversight.
  */
 public final class AnthropicLlmClient implements LlmClient {
 
